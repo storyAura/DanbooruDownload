@@ -1,10 +1,48 @@
 """Configuration management for DanbooruDownload."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Optional
 
 import yaml
+
+from formatter import DEFAULT_TAG_TEXT_CATEGORIES, normalize_tag_text_categories
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+@dataclass
+class QueueTaskConfig:
+    """Serializable queue task settings."""
+
+    tags: str = ""
+    folder_name: str = ""
+    max_posts: int = 100
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "QueueTaskConfig":
+        """Build a queue task config from arbitrary YAML data."""
+        if not isinstance(data, dict):
+            return cls()
+
+        try:
+            max_posts = int(data.get("max_posts", 100) or 100)
+        except (TypeError, ValueError):
+            max_posts = 100
+
+        return cls(
+            tags=str(data.get("tags", "") or ""),
+            folder_name=str(data.get("folder_name", "") or ""),
+            max_posts=max_posts,
+        )
 
 
 @dataclass
@@ -29,6 +67,13 @@ class Config:
     concurrent_downloads: int = 8
     skip_existing: bool = True
     timeout: float = 30.0
+    queue_tasks: list[QueueTaskConfig] = field(default_factory=list)
+    save_tag_txt: bool = False
+    tag_txt_categories: list[str] = field(
+        default_factory=lambda: list(DEFAULT_TAG_TEXT_CATEGORIES)
+    )
+    tag_txt_underscore_to_space: bool = True
+    tag_txt_escape_special_chars: bool = True
 
     def build_tags_query(self) -> str:
         """Build the final tags query string including rating, score, and blocked tags."""
@@ -53,10 +98,24 @@ class Config:
         """Load config from a YAML file."""
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
+        queue_data = data.get("queue_tasks", data.get("queue_items", []))
+        if isinstance(queue_data, list):
+            data["queue_tasks"] = [QueueTaskConfig.from_dict(item) for item in queue_data]
+        else:
+            data["queue_tasks"] = []
+        data["tag_txt_categories"] = normalize_tag_text_categories(
+            data.get("tag_txt_categories", DEFAULT_TAG_TEXT_CATEGORIES)
+        )
+        data["save_tag_txt"] = _as_bool(data.get("save_tag_txt"), default=False)
+        data["tag_txt_underscore_to_space"] = _as_bool(
+            data.get("tag_txt_underscore_to_space"), default=True
+        )
+        data["tag_txt_escape_special_chars"] = _as_bool(
+            data.get("tag_txt_escape_special_chars"), default=True
+        )
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     def to_yaml(self, path: str | Path) -> None:
         """Save current config to a YAML file."""
-        from dataclasses import asdict
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(asdict(self), f, default_flow_style=False, allow_unicode=True)

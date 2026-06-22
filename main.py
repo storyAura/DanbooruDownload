@@ -1,4 +1,4 @@
-"""DanbooruDownload — CLI tool for downloading images from Danbooru and mirrors.
+"""DanbooruDownload - CLI tool for downloading images from Danbooru and mirrors.
 
 Usage examples:
     python main.py --tags "landscape rating:g score:>50" --limit 20
@@ -26,11 +26,9 @@ from formatter import FilenameFormatter
 from downloader import Downloader
 
 
-BANNER = r"""
-╔══════════════════════════════════════════╗
-║       🎨 DanbooruDownload v1.0          ║
-║   Fast image downloader for Danbooru    ║
-╚══════════════════════════════════════════╝
+BANNER = """
+DanbooruDownload
+Fast image downloader for Danbooru
 """
 
 
@@ -105,7 +103,7 @@ def build_config(args: argparse.Namespace) -> Config:
     if args.config:
         config_path = Path(args.config)
         if not config_path.exists():
-            print(f"❌ Config file not found: {args.config}")
+            print(f"ERROR Config file not found: {args.config}")
             sys.exit(1)
         config = Config.from_yaml(config_path)
     else:
@@ -148,29 +146,29 @@ def main():
     # Save config and exit if requested
     if args.save_config:
         config.to_yaml(args.save_config)
-        print(f"✅ Config saved to: {args.save_config}")
+        print(f"OK Config saved to: {args.save_config}")
         return
 
     # Validate
     tags_query = config.build_tags_query()
     if not tags_query.strip():
-        print("⚠️  No search tags specified. Use -t/--tags to provide search tags.")
+        print("WARN No search tags specified. Use -t/--tags to provide search tags.")
         print("    Example: python main.py -t \"landscape rating:g score:>50\"")
         sys.exit(1)
 
     # Display search info
-    print(f"🔍 Search tags:    {tags_query}")
-    print(f"🌐 Site:           {config.base_url}")
-    print(f"📁 Save to:        {Path(config.save_dir).resolve()}")
-    print(f"📝 Filename format: {config.filename_format}")
-    print(f"📊 Max posts:      {config.max_posts}")
-    print(f"⚡ Concurrent:     {config.concurrent_downloads}")
+    print(f"Search tags:      {tags_query}")
+    print(f"Site:             {config.base_url}")
+    print(f"Save to:          {Path(config.save_dir).resolve()}")
+    print(f"Filename format:  {config.filename_format}")
+    print(f"Max posts:        {config.max_posts}")
+    print(f"Concurrent:       {config.concurrent_downloads}")
     if config.username:
-        print(f"🔑 Auth:           {config.username}")
+        print(f"Auth:             {config.username}")
     print()
 
     # Search for posts
-    print("🔎 Searching for posts...")
+    print("Searching for posts...")
     start_time = time.time()
 
     with DanbooruClient(
@@ -182,10 +180,10 @@ def main():
         posts = list(client.search_all(tags=tags_query, max_posts=config.max_posts))
 
     search_time = time.time() - start_time
-    print(f"✅ Found {len(posts)} downloadable posts ({search_time:.1f}s)")
+    print(f"Found {len(posts)} downloadable posts ({search_time:.1f}s)")
 
     if not posts:
-        print("😢 No posts found matching your search criteria.")
+        print("No posts found matching your search criteria.")
         return
 
     print()
@@ -198,6 +196,10 @@ def main():
         max_concurrent=config.concurrent_downloads,
         skip_existing=config.skip_existing,
         timeout=config.timeout,
+        save_tag_txt=config.save_tag_txt,
+        tag_txt_categories=config.tag_txt_categories,
+        tag_txt_underscore_to_space=config.tag_txt_underscore_to_space,
+        tag_txt_escape_special_chars=config.tag_txt_escape_special_chars,
     )
 
     start_time = time.time()
@@ -206,22 +208,22 @@ def main():
 
     # Summary
     print()
-    print("═" * 42)
-    print(f"✅ Downloaded:  {stats['downloaded']}")
-    print(f"⏭️  Skipped:     {stats['skipped']}")
+    print("=" * 42)
+    print(f"Downloaded:  {stats['downloaded']}")
+    print(f"Skipped:     {stats['skipped']}")
     if stats["failed"]:
-        print(f"❌ Failed:      {stats['failed']}")
-    print(f"⏱️  Time:        {dl_time:.1f}s")
-    print(f"📁 Saved to:    {Path(config.save_dir).resolve()}")
-    print("═" * 42)
+        print(f"Failed:      {stats['failed']}")
+    print(f"Time:        {dl_time:.1f}s")
+    print(f"Saved to:    {Path(config.save_dir).resolve()}")
+    print("=" * 42)
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n⛔ Download cancelled by user.")
+        print("\n\nDownload cancelled by user.")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nError: {e}")
         sys.exit(1)

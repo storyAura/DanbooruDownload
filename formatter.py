@@ -3,12 +3,15 @@
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 # Characters not allowed in filenames on Windows
 _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _MAX_FILENAME_LEN = 200
+TAG_TEXT_CATEGORY_ORDER = ("artist", "copyright", "character", "general", "meta")
+DEFAULT_TAG_TEXT_CATEGORIES = ("character", "general")
+_TAG_TEXT_ESCAPE_RE = re.compile(r"([\\()\[\]{}])")
 
 
 def _sanitize(text: str) -> str:
@@ -26,6 +29,51 @@ def _extract_tags_by_category(post: dict, category_key: str) -> str:
     'tag_string_character', 'tag_string_copyright', 'tag_string_general'.
     """
     return post.get(f"tag_string_{category_key}", "")
+
+
+def normalize_tag_text_categories(categories: Iterable[str] | str | None) -> list[str]:
+    """Return valid tag categories in the fixed Danbooru sidebar order."""
+    if categories is None:
+        categories = DEFAULT_TAG_TEXT_CATEGORIES
+    elif isinstance(categories, str):
+        categories = categories.replace(",", " ").split()
+
+    wanted = {str(category).strip().lower() for category in categories if str(category).strip()}
+    return [category for category in TAG_TEXT_CATEGORY_ORDER if category in wanted]
+
+
+class TagTextFormatter:
+    """Format Danbooru tag categories into LoRA-style comma-separated txt tags."""
+
+    def __init__(
+        self,
+        categories: Iterable[str] | str | None = None,
+        underscore_to_space: bool = False,
+        escape_special_chars: bool = False,
+    ):
+        self.categories = normalize_tag_text_categories(categories)
+        self.underscore_to_space = underscore_to_space
+        self.escape_special_chars = escape_special_chars
+
+    def _format_tag(self, tag: str) -> str:
+        if self.underscore_to_space:
+            tag = tag.replace("_", " ")
+        if self.escape_special_chars:
+            tag = _TAG_TEXT_ESCAPE_RE.sub(r"\\\1", tag)
+        return tag
+
+    def format(self, post: dict) -> str:
+        tags: list[str] = []
+        seen: set[str] = set()
+
+        for category in self.categories:
+            raw_tags = _extract_tags_by_category(post, category)
+            for tag in raw_tags.split():
+                if tag and tag not in seen:
+                    tags.append(self._format_tag(tag))
+                    seen.add(tag)
+
+        return ", ".join(tags)
 
 
 class FilenameFormatter:

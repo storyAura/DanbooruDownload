@@ -1,302 +1,250 @@
-<p align="center">
-  <h1 align="center">🎨 DanbooruDownload</h1>
-  <p align="center">
-    快速、强大、易用的 Danbooru 图片批量下载工具<br>
-    <em>A fast, powerful, and user-friendly batch image downloader for Danbooru</em>
-  </p>
-  <p align="center">
-    <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python 3.10+">
-    <img src="https://img.shields.io/badge/platform-Windows-0078d4?logo=windows" alt="Windows">
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-    <img src="https://img.shields.io/badge/GUI-CustomTkinter-purple" alt="CustomTkinter">
-  </p>
-  <p align="center">
-    <a href="#-中文文档">中文</a> · <a href="#-english-documentation">English</a>
-  </p>
-</p>
+# DanbooruDownload
 
----
+快速、易用的 Danbooru 及兼容站点批量下载工具，提供图形界面和命令行两种使用方式。
 
-# � 中文文档
+A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
-## 简介
+## 中文说明
 
-**DanbooruDownload** 是一款专为 [Danbooru](https://danbooru.donmai.us) 及其兼容镜像站（如 Safebooru）设计的图片批量下载工具。无论你是需要收集特定画师的作品、某个角色的同人图，还是批量下载高质量壁纸素材，DanbooruDownload 都可以帮你高效完成。
+### 主要功能
 
-本工具提供 **精美的 GUI 图形界面** 和 **强大的命令行 CLI** 两种使用方式，适合不同习惯的用户。GUI 基于 CustomTkinter 构建，拥有现代化暗色主题界面，告别传统爬虫工具的命令行恐惧。
-
-## 为什么选择 DanbooruDownload？
-
-| 🏆 优势 | 说明 |
-|---------|------|
-| **零门槛上手** | 双击 `start.bat` 即可运行，自动配置环境、安装依赖，无需手动折腾 |
-| **精美 GUI** | 基于 CustomTkinter 的现代深色界面，中英双语切换，操作直观 |
-| **极速下载** | 异步并发引擎，支持自定义并发数（默认 8 路），充分利用带宽 |
-| **智能续传** | MD5 校验已下载文件，避免重复下载，断点继续不浪费流量 |
-| **灵活命名** | 12 种文件名占位符自由组合（画师、角色、ID、评分、日期…） |
-| **高级筛选** | 支持评级过滤、最低评分、屏蔽标签，精准获取目标内容 |
-| **多站兼容** | 支持 Danbooru 及所有兼容 API 的镜像站 |
-| **视频控制** | 可选择下载或跳过视频/动图文件（mp4, webm, zip） |
-| **配置管理** | YAML 配置文件导入/导出，方便复用和分享下载参数 |
-| **完全开源** | MIT 许可证，自由使用和修改 |
-
-## 📦 安装
+| 功能 | 说明 |
+| --- | --- |
+| GUI 和 CLI | 双击 `start.bat` 使用图形界面，也可以用 `python main.py` 批量下载。 |
+| 站点预设 | GUI 内置 Danbooru、AIBooru、Gelbooru、Safebooru，也支持自定义站点地址。 |
+| 下载队列 | 可以把多个标签搜索加入队列，按顺序下载、查看单项进度，并对失败任务重爬。 |
+| 并发下载 | 异步下载引擎，支持自定义并发数和请求超时。 |
+| 智能跳过 | 已存在文件会进行 MD5 校验，避免重复下载。 |
+| 流式写入 | 大文件分块写入磁盘，降低内存占用。 |
+| 速度显示 | GUI 下载时显示实时速度。 |
+| 同名 TXT 标签 | 可为每张图片生成同名 `.txt` 标签文件，适合数据集和 LoRA 工作流。 |
+| YAML 配置 | 支持导入、导出下载设置、队列任务和 TXT 标签选项。 |
+| 视频控制 | 可选择下载或跳过 `mp4`、`webm`、`zip` 动图/视频文件。 |
 
 ### 环境要求
 
-- **Python 3.10 或更高版本** — [点击下载](https://www.python.org/downloads/)
-  > ⚠️ 安装 Python 时请务必勾选 **"Add Python to PATH"**
-- **Windows** 操作系统
+- Windows
+- Python 3.10 或更高版本
+- 能访问目标 booru 站点
 
-### 下载项目
+手动安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
+依赖包括 `httpx`、`httpcore[asyncio]`、`typing_extensions`、`tqdm`、`pyyaml`、`customtkinter`。
+
+### 快速开始
 
 ```bash
 git clone https://github.com/storyAura/DanbooruDownload.git
 cd DanbooruDownload
 ```
 
-或者直接在 GitHub 页面点击 **Code → Download ZIP**，解压后进入文件夹。
+启动 GUI：
 
-### 安装依赖
-
-**方式一（推荐）**：直接双击 `start.bat`，脚本会自动完成以下步骤：
-1. 创建 Python 虚拟环境
-2. 安装全部依赖
-3. 启动 GUI 界面
-
-**方式二（手动安装）**：
-
-```bash
-pip install -r requirements.txt
+```bat
+start.bat
 ```
 
-## 🚀 使用方法
+`start.bat` 会创建或修复 `.venv`，安装缺失依赖，然后用 `pythonw` 启动 `gui.py`。
 
-### GUI 图形界面（推荐）
+GUI 默认保存到项目内的 `Download` 文件夹。该目录只用于存放下载内容，已被 `.gitignore` 忽略，不会提交到仓库。
 
-双击 `start.bat` 即可启动 GUI 界面。在界面中可以：
+### GUI 使用
 
-- 配置站点地址和 API 认证信息
-- 输入搜索标签，设置评级和评分筛选
-- 自定义保存路径和文件命名格式
-- 控制并发数、超时时间等下载参数
-- 实时查看下载进度和日志
-- 随时停止下载任务
+1. 选择站点预设，或输入自定义站点地址。
+2. 输入搜索标签、评级、最低评分和屏蔽标签。
+3. 设置保存目录和文件名格式。
+4. 设置并发数、超时、跳过已存在文件、视频下载等选项。
+5. 可选开启同名 TXT 标签导出。
+6. 点击 `开始下载` 执行单次任务，或把多个任务加入队列后点击 `全部开始`。
 
-### 命令行 CLI
+### 下载队列
+
+GUI 队列任务会保存：
+
+- 搜索标签
+- 文件夹名
+- 最大下载数量
+
+队列开始前可以移除任务。失败或取消的任务可以点击 `重爬` 重新加入下载流程。导出 YAML 配置时，队列任务也会一起保存。
+
+### 同名 TXT 标签
+
+开启 `保存同名 TXT 标签` 后，每张图片旁边会生成同名 `.txt` 文件：
+
+```text
+image_name.png
+image_name.txt
+```
+
+标签按 Danbooru 侧栏顺序写入：
+
+```text
+artist, copyright, character, general, meta
+```
+
+GUI 默认选择 `character` 和 `general`。可选将下划线转为空格，并转义括号等特殊字符。
+
+CLI 如需生成 TXT，可通过 YAML 配置开启：
+
+```yaml
+save_tag_txt: true
+tag_txt_categories:
+  - character
+  - general
+tag_txt_underscore_to_space: true
+tag_txt_escape_special_chars: true
+```
+
+然后运行：
 
 ```bash
-# 基本用法 — 下载风景图
+python main.py --config my_config.yaml
+```
+
+### CLI 用法
+
+```bash
+# 基础搜索
 python main.py -t "landscape rating:g" -l 20
 
-# 指定画师 + 高评分筛选
+# 评级和评分过滤
 python main.py -t "1girl solo" --rating s --min-score 100
 
-# 使用镜像站下载
+# 使用兼容镜像站
 python main.py -u "https://safebooru.donmai.us" -t "scenery" -l 50
 
-# 自定义保存格式和路径
+# 自定义保存目录和文件名
 python main.py -t "touhou" -o ./touhou -f "{artist}_{id}.{ext}" -c 12
 
-# 使用 YAML 配置文件
+# 从 YAML 读取配置
 python main.py --config my_config.yaml
 
-# 保存当前参数为配置文件
+# 保存当前 CLI 参数到 YAML
 python main.py -t "landscape" -l 50 --save-config my_config.yaml
 ```
 
-### CLI 完整参数
+### CLI 参数
 
 | 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-t`, `--tags` | 搜索标签（支持 metatag） | — |
-| `--rating` | 评级筛选：`g` / `s` / `q` / `e` | 不限 |
+| --- | --- | --- |
+| `-t`, `--tags` | 搜索标签，支持 Danbooru metatag | 空 |
+| `--rating` | 评级过滤：`g`、`s`、`q`、`e` | 不限 |
 | `--min-score` | 最低评分 | 不限 |
 | `-o`, `--output` | 保存目录 | `./downloads` |
-| `-f`, `--format` | 文件名格式模板 | `{id}_{artist}_{md5}.{ext}` |
+| `-f`, `--format` | 文件名模板 | `{id}_{artist}_{md5}.{ext}` |
 | `-l`, `--limit` | 最大下载数量 | `100` |
 | `-c`, `--concurrent` | 并发下载数 | `8` |
-| `-u`, `--url` | Danbooru 站点地址 | `https://danbooru.donmai.us` |
-| `--username` | API 用户名 | — |
-| `--api-key` | API 密钥 | — |
-| `--config` | 读取 YAML 配置文件 | — |
-| `--save-config` | 保存配置到文件 | — |
-| `--no-skip` | 不跳过已存在文件 | 关闭 |
-| `--timeout` | 请求超时（秒） | `30` |
+| `-u`, `--url` | Danbooru 兼容站点地址 | `https://danbooru.donmai.us` |
+| `--username` | API 用户名 | 空 |
+| `--api-key` | API 密钥 | 空 |
+| `--config` | 读取 YAML 配置 | 空 |
+| `--save-config` | 保存配置到 YAML 后退出 | 空 |
+| `--no-skip` | 重新下载已存在文件 | 关闭 |
+| `--timeout` | HTTP 超时秒数 | `30` |
 
-## 📝 文件名格式占位符
+### 文件名占位符
 
 | 占位符 | 说明 | 示例 |
-|--------|------|------|
+| --- | --- | --- |
 | `{id}` | 帖子 ID | `12345` |
-| `{md5}` | 文件 MD5 哈希 | `a1b2c3d4...` |
-| `{artist}` | 画师名 | `artist_name` |
-| `{character}` | 角色名 | `hatsune_miku` |
-| `{copyright}` | 作品/系列 | `vocaloid` |
-| `{rating}` | 评级 | `g` / `s` / `q` / `e` |
+| `{md5}` | 文件 MD5 | `a1b2c3d4...` |
+| `{artist}` | 画师标签 | `artist_name` |
+| `{character}` | 角色标签 | `hatsune_miku` |
+| `{copyright}` | 版权/作品标签 | `vocaloid` |
+| `{rating}` | 评级 | `g` |
 | `{score}` | 评分 | `150` |
 | `{date}` | 上传日期 | `2025-01-15` |
-| `{width}` / `{height}` | 图片尺寸 | `1920` / `1080` |
+| `{width}` | 图片宽度 | `1920` |
+| `{height}` | 图片高度 | `1080` |
 | `{ext}` | 文件扩展名 | `png` |
-| `{tags}` | 所有标签（前 10 个） | `tag1+tag2+...` |
+| `{tags}` | 前 10 个通用标签 | `tag1+tag2+...` |
 
-**默认格式：** `{artist}_{id}.{ext}`
+GUI 默认文件名格式：
 
-## 📂 项目结构
-
-```
-DanbooruDownload/
-├── gui.py              # GUI 图形界面（CustomTkinter）
-├── main.py             # CLI 命令行入口
-├── config.py           # 配置管理（YAML 导入/导出）
-├── danbooru_client.py  # Danbooru API 客户端
-├── downloader.py       # 异步批量下载引擎
-├── formatter.py        # 文件名格式化引擎
-├── locales/            # 国际化语言包
-│   ├── zh_cn.py        #   中文
-│   └── en.py           #   English
-├── start.bat           # Windows 一键启动脚本
-└── requirements.txt    # Python 依赖列表
+```text
+{artist}_{id}.{ext}
 ```
 
----
+CLI 默认文件名格式：
 
-# � English Documentation
+```text
+{id}_{artist}_{md5}.{ext}
+```
 
-## Introduction
+## English
 
-**DanbooruDownload** is a powerful batch image downloader built specifically for [Danbooru](https://danbooru.donmai.us) and compatible mirror sites (e.g., Safebooru). Whether you need to collect works from a specific artist, fan art of a character, or batch download high-quality wallpapers, DanbooruDownload can handle it efficiently.
+### Highlights
 
-The tool offers both a **beautiful GUI** and a **powerful CLI**, catering to different user preferences. The GUI is built with CustomTkinter, featuring a modern dark-themed interface — no more intimidating terminal windows.
+| Feature | Description |
+| --- | --- |
+| GUI and CLI | Use the graphical app from `start.bat`, or automate downloads with `python main.py`. |
+| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, and Safebooru, plus custom URLs. |
+| Download queue | Add multiple tag searches to the GUI queue, run them in order, retry tasks, and track per-task progress. |
+| Concurrent downloads | Async downloader with configurable concurrency and request timeouts. |
+| Smart skipping | Existing files are checked by MD5 so repeated runs do not waste bandwidth. |
+| Streaming downloads | Large files are written in chunks instead of being loaded fully into memory. |
+| Speed display | GUI downloads report live transfer speed. |
+| TXT tag export | Optionally save a same-name `.txt` file for each image, useful for dataset and LoRA workflows. |
+| YAML configs | Import/export settings, including queued tasks and TXT tag options. |
+| Video control | Choose whether to download or skip `mp4`, `webm`, and `zip` animation files. |
 
-## Why DanbooruDownload?
-
-| 🏆 Advantage | Description |
-|--------------|-------------|
-| **Zero Setup** | Double-click `start.bat` to run — auto-configures environment and installs dependencies |
-| **Beautiful GUI** | Modern dark-themed interface with Chinese/English toggle, intuitive and clean |
-| **Blazing Fast** | Async concurrent download engine with adjustable concurrency (default: 8) |
-| **Smart Resume** | MD5 checksum verification skips already-downloaded files, saving bandwidth |
-| **Flexible Naming** | 12 filename placeholders for complete customization (artist, character, ID, score, date…) |
-| **Advanced Filtering** | Rating filter, minimum score, blocked tags — precisely target the content you want |
-| **Multi-Site** | Works with Danbooru and all API-compatible mirror sites |
-| **Video Control** | Optionally download or skip video/animation files (mp4, webm, zip) |
-| **Config Management** | Import/export YAML configs for easy reuse and sharing |
-| **Fully Open Source** | MIT License — free to use and modify |
-
-## 📦 Installation
-
-### Requirements
-
-- **Python 3.10+** — [Download here](https://www.python.org/downloads/)
-  > ⚠️ Make sure to check **"Add Python to PATH"** during installation
-- **Windows** OS
-
-### Download
+### Quick Start
 
 ```bash
 git clone https://github.com/storyAura/DanbooruDownload.git
 cd DanbooruDownload
 ```
 
-Or click **Code → Download ZIP** on the GitHub page and extract.
-
-### Install Dependencies
-
-**Option A (Recommended)**: Double-click `start.bat`. It will automatically:
-1. Create a Python virtual environment
-2. Install all dependencies
-3. Launch the GUI
-
-**Option B (Manual)**:
-
-```bash
-pip install -r requirements.txt
+```bat
+start.bat
 ```
 
-## 🚀 Usage
+`start.bat` creates or repairs `.venv`, installs missing dependencies, and launches `gui.py` with `pythonw`.
 
-### GUI (Recommended)
+The GUI saves downloads to the local `Download` folder by default. This folder is ignored by Git and is only for downloaded files.
 
-Double-click `start.bat` to launch the GUI. From the interface you can:
-
-- Configure site URL and API authentication
-- Enter search tags with rating and score filters
-- Customize save path and filename format
-- Adjust concurrency, timeout, and other download settings
-- Monitor real-time download progress and logs
-- Stop downloads at any time
-
-### CLI
+### CLI Usage
 
 ```bash
-# Basic usage — download landscape images
 python main.py -t "landscape rating:g" -l 20
-
-# Filter by rating and score
 python main.py -t "1girl solo" --rating s --min-score 100
-
-# Use a mirror site
 python main.py -u "https://safebooru.donmai.us" -t "scenery" -l 50
-
-# Custom save format and path
 python main.py -t "touhou" -o ./touhou -f "{artist}_{id}.{ext}" -c 12
-
-# Use a YAML config file
 python main.py --config my_config.yaml
-
-# Save current settings to config
 python main.py -t "landscape" -l 50 --save-config my_config.yaml
 ```
 
-### CLI Parameters
+### YAML Queue Example
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `-t`, `--tags` | Search tags (supports metatags) | — |
-| `--rating` | Rating filter: `g` / `s` / `q` / `e` | Any |
-| `--min-score` | Minimum post score | Any |
-| `-o`, `--output` | Save directory | `./downloads` |
-| `-f`, `--format` | Filename format template | `{id}_{artist}_{md5}.{ext}` |
-| `-l`, `--limit` | Maximum number of downloads | `100` |
-| `-c`, `--concurrent` | Concurrent downloads | `8` |
-| `-u`, `--url` | Danbooru site URL | `https://danbooru.donmai.us` |
-| `--username` | API username | — |
-| `--api-key` | API key | — |
-| `--config` | Load YAML config file | — |
-| `--save-config` | Save settings to file | — |
-| `--no-skip` | Re-download existing files | Off |
-| `--timeout` | Request timeout (seconds) | `30` |
+```yaml
+queue_tasks:
+  - tags: "1girl solo"
+    folder_name: "solo"
+    max_posts: 100
+```
 
-## 📝 Filename Placeholders
+Queue tasks are currently used by the GUI. The CLI loads common download settings and TXT tag settings.
 
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `{id}` | Post ID | `12345` |
-| `{md5}` | File MD5 hash | `a1b2c3d4...` |
-| `{artist}` | Artist name(s) | `artist_name` |
-| `{character}` | Character name(s) | `hatsune_miku` |
-| `{copyright}` | Copyright/series | `vocaloid` |
-| `{rating}` | Rating | `g` / `s` / `q` / `e` |
-| `{score}` | Post score | `150` |
-| `{date}` | Upload date | `2025-01-15` |
-| `{width}` / `{height}` | Image dimensions | `1920` / `1080` |
-| `{ext}` | File extension | `png` |
-| `{tags}` | All tags (first 10) | `tag1+tag2+...` |
+## Project Structure
 
-**Default format:** `{artist}_{id}.{ext}`
+```text
+DanbooruDownload/
+|-- gui.py              # CustomTkinter GUI
+|-- main.py             # CLI entry point
+|-- config.py           # YAML config model and loader
+|-- danbooru_client.py  # Danbooru API client
+|-- downloader.py       # Async streaming downloader
+|-- formatter.py        # Filename and TXT tag formatters
+|-- locales/            # Chinese and English UI text
+|-- start.bat           # Windows launcher
+|-- requirements.txt    # Python dependencies
+`-- Download/           # Local download storage, ignored by Git
+```
 
----
+## License
 
-## ⚙️ Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| [httpx](https://www.python-httpx.org/) | HTTP client (sync + async) |
-| [tqdm](https://github.com/tqdm/tqdm) | CLI progress bar |
-| [pyyaml](https://pyyaml.org/) | YAML config file I/O |
-| [customtkinter](https://github.com/TomSchimansky/CustomTkinter) | Modern GUI framework |
-
-## 📄 License
-
-[MIT License](LICENSE) — Free to use, modify, and distribute.
+Released under the [MIT License](LICENSE).

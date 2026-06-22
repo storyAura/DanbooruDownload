@@ -14,6 +14,7 @@ class DanbooruClient:
     """
 
     POSTS_PER_PAGE = 200  # Danbooru API maximum
+    REQUEST_INTERVAL = 0.5  # Minimum seconds between API requests
 
     def __init__(
         self,
@@ -32,14 +33,24 @@ class DanbooruClient:
             headers={"User-Agent": "DanbooruDownload/1.0"},
             follow_redirects=True,
         )
+        self._last_request_time: float = 0.0
+
+    def _throttle(self):
+        """Enforce minimum interval between requests to avoid 429."""
+        now = time.monotonic()
+        elapsed = now - self._last_request_time
+        if elapsed < self.REQUEST_INTERVAL:
+            time.sleep(self.REQUEST_INTERVAL - elapsed)
+        self._last_request_time = time.monotonic()
 
     def _request(self, endpoint: str, params: dict | None = None) -> list | dict:
-        """Make a GET request to the API with retry logic."""
+        """Make a GET request to the API with retry logic and throttling."""
         url = f"{self.base_url}{endpoint}"
         max_retries = 3
 
         for attempt in range(max_retries):
             try:
+                self._throttle()
                 resp = self._client.get(url, params=params, auth=self.auth)
 
                 if resp.status_code == 429:
@@ -94,6 +105,7 @@ class DanbooruClient:
         self,
         tags: str = "",
         max_posts: int = 100,
+        on_log: Optional[callable] = None,
     ) -> Generator[dict, None, None]:
         """Search and paginate through all results up to max_posts.
 
@@ -106,10 +118,15 @@ class DanbooruClient:
         fetched = 0
         page: int | str = 1
         per_page = min(max_posts, self.POSTS_PER_PAGE)
+        page_num = 0
 
         while fetched < max_posts:
             remaining = max_posts - fetched
             limit = min(remaining, per_page)
+            page_num += 1
+
+            if on_log:
+                on_log(f"  📄 Fetching page {page_num}...")
 
             posts = self.search(tags=tags, limit=limit, page=page)
             if not posts:
