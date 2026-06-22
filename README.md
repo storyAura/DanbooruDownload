@@ -52,6 +52,20 @@ start.bat
 
 GUI 默认保存到项目内的 `Download` 文件夹。该目录只用于存放下载内容，已被 `.gitignore` 忽略，不会提交到仓库。
 
+### 实机演示
+
+主界面：
+
+![DanbooruDownload 主界面](docs/screenshots/gui-overview.png)
+
+站点预设：
+
+![站点预设下拉菜单](docs/screenshots/site-presets.png)
+
+下载队列和运行日志：
+
+![下载队列和运行日志](docs/screenshots/download-queue.png)
+
 ### GUI 使用
 
 1. 选择站点预设，或输入自定义站点地址。
@@ -206,6 +220,20 @@ start.bat
 `start.bat` creates or repairs `.venv`, installs missing dependencies, and launches `gui.py` with `pythonw`.
 
 The GUI saves downloads to the local `Download` folder by default. This folder is ignored by Git and is only for downloaded files.
+
+### Screenshots
+
+Main interface:
+
+![DanbooruDownload main interface](docs/screenshots/gui-overview.png)
+
+Site presets:
+
+![Site preset menu](docs/screenshots/site-presets.png)
+
+Download queue and logs:
+
+![Download queue and runtime logs](docs/screenshots/download-queue.png)
 
 ### CLI Usage
 
