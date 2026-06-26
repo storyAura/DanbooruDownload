@@ -1,0 +1,92 @@
+import unittest
+
+from config import Config
+from danbooru_client import (
+    PROFILE_DANBOORU,
+    PROFILE_GELBOORU,
+    PROFILE_MOEBOORU,
+    DanbooruClient,
+    _normalize_post,
+)
+
+
+class ConfigTagQueryTests(unittest.TestCase):
+    def test_build_tags_query_preserves_space_separated_tags(self):
+        config = Config(
+            tags="1girl solo",
+            blocked_tags="lowres -bad_anatomy",
+            rating="g",
+            min_score=50,
+        )
+
+        self.assertEqual(
+            config.build_tags_query(),
+            "1girl solo -lowres -bad_anatomy rating:g score:>=50",
+        )
+
+
+class ClientProfileTests(unittest.TestCase):
+    def test_detects_supported_api_profiles(self):
+        cases = [
+            ("https://danbooru.donmai.us", PROFILE_DANBOORU),
+            ("https://aibooru.online", PROFILE_DANBOORU),
+            ("https://safebooru.donmai.us", PROFILE_DANBOORU),
+            ("https://yande.re", PROFILE_MOEBOORU),
+            ("https://konachan.com", PROFILE_MOEBOORU),
+            ("https://gelbooru.com", PROFILE_GELBOORU),
+        ]
+
+        for base_url, expected_profile in cases:
+            with self.subTest(base_url=base_url):
+                client = DanbooruClient(base_url=base_url)
+                try:
+                    self.assertEqual(client.profile, expected_profile)
+                finally:
+                    client.close()
+
+
+class PostNormalizationTests(unittest.TestCase):
+    def test_normalizes_moebooru_post(self):
+        post = _normalize_post(
+            {
+                "id": 123,
+                "tags": "1girl solo",
+                "file_url": "https://files.yande.re/image/hash/yande.re%20123%20sample.jpg",
+                "width": "1600",
+                "height": "900",
+                "rating": "s",
+                "score": "42",
+                "created_at": 1_700_000_000,
+            }
+        )
+
+        self.assertEqual(post["tag_string"], "1girl solo")
+        self.assertEqual(post["file_ext"], "jpg")
+        self.assertEqual(post["image_width"], 1600)
+        self.assertEqual(post["image_height"], 900)
+        self.assertEqual(post["rating"], "s")
+        self.assertEqual(post["score"], 42)
+        self.assertIn("T", post["created_at"])
+
+    def test_normalizes_gelbooru_post(self):
+        post = _normalize_post(
+            {
+                "id": 456,
+                "tags": "landscape sky",
+                "file_url": "https://img.gelbooru.com/images/ab/cd/file.png?download=1",
+                "width": 1024,
+                "height": 768,
+                "rating": "explicit",
+                "score": "7",
+            }
+        )
+
+        self.assertEqual(post["tag_string"], "landscape sky")
+        self.assertEqual(post["file_ext"], "png")
+        self.assertEqual(post["rating"], "e")
+        self.assertEqual(post["score"], 7)
+        self.assertEqual(post["tag_string_artist"], "")
+
+
+if __name__ == "__main__":
+    unittest.main()

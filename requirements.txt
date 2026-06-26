@@ -4,3 +4,4 @@ typing_extensions
 tqdm
 pyyaml
 customtkinter
+Pillow

@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
-title DanbooruDownload v1.0
+title DanbooruDownload v1.1.0
 
 set "VENV_PY=.venv\Scripts\python.exe"
 set "VENV_PYW=.venv\Scripts\pythonw.exe"

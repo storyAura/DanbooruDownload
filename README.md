@@ -1,6 +1,6 @@
 # DanbooruDownload
 
-快速、易用的 Danbooru 及兼容站点批量下载工具，提供图形界面和命令行两种使用方式。
+快速、易用的 Danbooru 及兼容站点批量下载工具，提供 CustomTkinter 图形界面和命令行两种使用方式。
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
@@ -11,14 +11,14 @@ A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.
 | 功能 | 说明 |
 | --- | --- |
 | GUI 和 CLI | 双击 `start.bat` 使用图形界面，也可以用 `python main.py` 批量下载。 |
-| 站点预设 | GUI 内置 Danbooru、AIBooru、Gelbooru、Safebooru，也支持自定义站点地址。 |
+| 站点预设 | 内置 Danbooru、AIBooru、Gelbooru、Safebooru、Yande.re、Konachan，也支持自定义站点地址。 |
 | 下载队列 | 可以把多个标签搜索加入队列，按顺序下载、查看单项进度，并对失败任务重爬。 |
 | 并发下载 | 异步下载引擎，支持自定义并发数和请求超时。 |
 | 智能跳过 | 已存在文件会进行 MD5 校验，避免重复下载。 |
-| 流式写入 | 大文件分块写入磁盘，降低内存占用。 |
-| 速度显示 | GUI 下载时显示实时速度。 |
 | 同名 TXT 标签 | 可为每张图片生成同名 `.txt` 标签文件，适合数据集和 LoRA 工作流。 |
-| YAML 配置 | 支持导入、导出下载设置、队列任务和 TXT 标签选项。 |
+| 自动格式转换 | 下载后可自动转换为 JPG 或 WebP，支持质量、WebP 无损和压缩程度配置。 |
+| 默认配置 | 设置窗口可保存当前设置为 `default_config.yaml`，下次启动自动加载。 |
+| YAML 配置 | 支持导入、导出下载设置、队列任务、TXT 标签选项和图片转换选项。 |
 | 视频控制 | 可选择下载或跳过 `mp4`、`webm`、`zip` 动图/视频文件。 |
 
 ### 环境要求
@@ -33,7 +33,7 @@ A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.
 pip install -r requirements.txt
 ```
 
-依赖包括 `httpx`、`httpcore[asyncio]`、`typing_extensions`、`tqdm`、`pyyaml`、`customtkinter`。
+依赖包括 `httpx`、`httpcore[asyncio]`、`typing_extensions`、`tqdm`、`pyyaml`、`customtkinter`、`Pillow`。
 
 ### 快速开始
 
@@ -50,8 +50,6 @@ start.bat
 
 `start.bat` 会创建或修复 `.venv`，安装缺失依赖，然后用 `pythonw` 启动 `gui.py`。
 
-GUI 默认保存到项目内的 `Download` 文件夹。该目录只用于存放下载内容，已被 `.gitignore` 忽略，不会提交到仓库。
-
 ### 实机演示
 
 主界面：
@@ -61,6 +59,10 @@ GUI 默认保存到项目内的 `Download` 文件夹。该目录只用于存放�
 站点预设：
 
 ![站点预设下拉菜单](docs/screenshots/site-presets.png)
+
+自动转换设置：
+
+![自动转换设置](docs/screenshots/settings-conversion.png)
 
 下载队列和运行日志：
 
@@ -73,17 +75,32 @@ GUI 默认保存到项目内的 `Download` 文件夹。该目录只用于存放�
 3. 设置保存目录和文件名格式。
 4. 设置并发数、超时、跳过已存在文件、视频下载等选项。
 5. 可选开启同名 TXT 标签导出。
-6. 点击 `开始下载` 执行单次任务，或把多个任务加入队列后点击 `全部开始`。
+6. 可选在设置窗口的“杂项”里开启自动图片转换，并选择 JPG/WebP、质量、WebP 无损和压缩程度。
+7. 搜索多个标签时用空格分隔，例如 `1girl solo rating:g`。Gelbooru、Konachan、Safebooru 同样使用空格分隔多标签。
+8. 点击 `当前开始下载` 执行单次任务，或把多个任务加入队列后点击 `队列开始下载`。
 
-### 下载队列
+### 自动图片转换
 
-GUI 队列任务会保存：
+开启 `下载后自动转换图片格式` 后，原图仍保存在原下载目录，转换后的文件保存到同级 `jpg_webp` 文件夹：
 
-- 搜索标签
-- 文件夹名
-- 最大下载数量
+```text
+Download/example/image.png
+Download/example/jpg_webp/image.webp
+```
 
-队列开始前可以移除任务。失败或取消的任务可以点击 `重爬` 重新加入下载流程。导出 YAML 配置时，队列任务也会一起保存。
+可配置项：
+
+- 格式：`JPG` 或 `WebP`
+- 质量：`1..100`
+- WebP 无损：仅 WebP 生效
+- 压缩程度：`0..6`
+
+如果同时开启 TXT 标签导出，`.txt` 会跟随转换后的文件：
+
+```text
+Download/example/jpg_webp/image.webp
+Download/example/jpg_webp/image.txt
+```
 
 ### 同名 TXT 标签
 
@@ -102,7 +119,7 @@ artist, copyright, character, general, meta
 
 GUI 默认选择 `character` 和 `general`。可选将下划线转为空格，并转义括号等特殊字符。
 
-CLI 如需生成 TXT，可通过 YAML 配置开启：
+CLI 如需生成 TXT 或启用图片转换，可通过 YAML 配置开启：
 
 ```yaml
 save_tag_txt: true
@@ -111,6 +128,11 @@ tag_txt_categories:
   - general
 tag_txt_underscore_to_space: true
 tag_txt_escape_special_chars: true
+auto_convert_images: true
+auto_convert_format: webp
+auto_convert_quality: 95
+auto_convert_lossless: false
+auto_convert_effort: 6
 ```
 
 然后运行：
@@ -196,14 +218,14 @@ CLI 默认文件名格式：
 | Feature | Description |
 | --- | --- |
 | GUI and CLI | Use the graphical app from `start.bat`, or automate downloads with `python main.py`. |
-| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, and Safebooru, plus custom URLs. |
+| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, Safebooru, Yande.re, and Konachan, plus custom URLs. |
 | Download queue | Add multiple tag searches to the GUI queue, run them in order, retry tasks, and track per-task progress. |
 | Concurrent downloads | Async downloader with configurable concurrency and request timeouts. |
 | Smart skipping | Existing files are checked by MD5 so repeated runs do not waste bandwidth. |
-| Streaming downloads | Large files are written in chunks instead of being loaded fully into memory. |
-| Speed display | GUI downloads report live transfer speed. |
 | TXT tag export | Optionally save a same-name `.txt` file for each image, useful for dataset and LoRA workflows. |
-| YAML configs | Import/export settings, including queued tasks and TXT tag options. |
+| Image conversion | Convert downloaded still images to JPG or WebP with quality, lossless WebP, and compression controls. |
+| Default config | Save the current GUI settings as `default_config.yaml` and load them automatically on next start. |
+| YAML configs | Import/export settings, queued tasks, TXT tag options, and image conversion options. |
 | Video control | Choose whether to download or skip `mp4`, `webm`, and `zip` animation files. |
 
 ### Quick Start
@@ -219,8 +241,6 @@ start.bat
 
 `start.bat` creates or repairs `.venv`, installs missing dependencies, and launches `gui.py` with `pythonw`.
 
-The GUI saves downloads to the local `Download` folder by default. This folder is ignored by Git and is only for downloaded files.
-
 ### Screenshots
 
 Main interface:
@@ -230,6 +250,10 @@ Main interface:
 Site presets:
 
 ![Site preset menu](docs/screenshots/site-presets.png)
+
+Image conversion settings:
+
+![Image conversion settings](docs/screenshots/settings-conversion.png)
 
 Download queue and logs:
 
@@ -246,31 +270,49 @@ python main.py --config my_config.yaml
 python main.py -t "landscape" -l 50 --save-config my_config.yaml
 ```
 
-### YAML Queue Example
+Use spaces between multiple search tags, for example `1girl solo rating:g`. Gelbooru, Konachan, and Safebooru use the same space-separated tag query style.
+
+### YAML Queue And Conversion Example
 
 ```yaml
 queue_tasks:
   - tags: "1girl solo"
     folder_name: "solo"
     max_posts: 100
+auto_convert_images: true
+auto_convert_format: webp
+auto_convert_quality: 95
+auto_convert_lossless: false
+auto_convert_effort: 6
 ```
 
-Queue tasks are currently used by the GUI. The CLI loads common download settings and TXT tag settings.
+Queue tasks are currently used by the GUI. The CLI loads common download settings, TXT tag settings, and image conversion settings.
 
 ## Project Structure
 
 ```text
 DanbooruDownload/
-|-- gui.py              # CustomTkinter GUI
-|-- main.py             # CLI entry point
-|-- config.py           # YAML config model and loader
-|-- danbooru_client.py  # Danbooru API client
-|-- downloader.py       # Async streaming downloader
-|-- formatter.py        # Filename and TXT tag formatters
-|-- locales/            # Chinese and English UI text
-|-- start.bat           # Windows launcher
-|-- requirements.txt    # Python dependencies
-`-- Download/           # Local download storage, ignored by Git
+|-- gui.py                     # Compatibility GUI entry point
+|-- main.py                    # Compatibility CLI entry point
+|-- config.py                  # Compatibility wrapper
+|-- danbooru_client.py         # Compatibility wrapper
+|-- downloader.py              # Compatibility wrapper
+|-- formatter.py               # Compatibility wrapper
+|-- danbooru_download/
+|   |-- cli.py                 # CLI implementation
+|   |-- core/
+|   |   |-- config.py          # YAML config model and loader
+|   |   |-- danbooru_client.py # Booru API client and post normalization
+|   |   |-- downloader.py      # Async streaming downloader
+|   |   |-- formatter.py       # Filename and TXT tag formatters
+|   |   `-- image_conversion.py # JPG/WebP conversion helpers
+|   |-- ui/
+|   |   `-- app.py             # CustomTkinter GUI
+|   `-- locales/               # Chinese and English UI text
+|-- docs/screenshots/          # README screenshots
+|-- tests/                     # Unit tests
+|-- start.bat                  # Windows launcher
+`-- requirements.txt           # Python dependencies
 ```
 
 ## License
