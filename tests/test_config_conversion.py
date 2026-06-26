@@ -14,11 +14,18 @@ class ConfigConversionTests(unittest.TestCase):
         self.assertEqual(config.auto_convert_quality, 95)
         self.assertFalse(config.auto_convert_lossless)
         self.assertEqual(config.auto_convert_effort, 6)
+        self.assertEqual(config.auto_convert_background_mode, "color")
+        self.assertEqual(config.auto_convert_background_color, "#ff4fd8")
 
     def test_yaml_round_trips_conversion_settings(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.yaml"
-            Config(auto_convert_images=True, auto_convert_format="webp").to_yaml(path)
+            Config(
+                auto_convert_images=True,
+                auto_convert_format="webp",
+                auto_convert_background_mode="white",
+                auto_convert_background_color="#00ff66",
+            ).to_yaml(path)
 
             loaded = Config.from_yaml(path)
 
@@ -27,6 +34,8 @@ class ConfigConversionTests(unittest.TestCase):
         self.assertEqual(loaded.auto_convert_quality, 95)
         self.assertFalse(loaded.auto_convert_lossless)
         self.assertEqual(loaded.auto_convert_effort, 6)
+        self.assertEqual(loaded.auto_convert_background_mode, "white")
+        self.assertEqual(loaded.auto_convert_background_color, "#00ff66")
 
     def test_invalid_conversion_options_fall_back_to_safe_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -39,6 +48,8 @@ class ConfigConversionTests(unittest.TestCase):
                         "auto_convert_quality: 500",
                         "auto_convert_lossless: yes",
                         "auto_convert_effort: 99",
+                        "auto_convert_background_mode: stripes",
+                        "auto_convert_background_color: hotpink",
                     ]
                 ),
                 encoding="utf-8",
@@ -51,6 +62,8 @@ class ConfigConversionTests(unittest.TestCase):
         self.assertEqual(loaded.auto_convert_quality, 95)
         self.assertTrue(loaded.auto_convert_lossless)
         self.assertEqual(loaded.auto_convert_effort, 6)
+        self.assertEqual(loaded.auto_convert_background_mode, "color")
+        self.assertEqual(loaded.auto_convert_background_color, "#ff4fd8")
 
 
 if __name__ == "__main__":

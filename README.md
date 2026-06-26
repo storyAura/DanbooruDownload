@@ -4,9 +4,15 @@
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
+Current version: `v1.2`
+
+v1.2 focuses on WebP transparency backgrounds, clearer converted-output folders, a color picker in settings, a refreshed logo, and repeatable Windows EXE packaging. See [UPDATE.md](UPDATE.md) for the full changelog.
+
 ## 版本更新
 
-本次版本的主要变化和与上一版的区别见 [UPDATE.md](UPDATE.md)。
+当前版本：`v1.2`
+
+本次版本重点更新了 WebP 透明背景处理、转换输出目录命名、设置页颜色选择器、Logo 与 Windows EXE 打包流程。完整更新记录见 [UPDATE.md](UPDATE.md)。
 
 ## 中文说明
 
@@ -54,6 +60,14 @@ start.bat
 
 `start.bat` 会创建或修复 `.venv`，安装缺失依赖，然后用 `pythonw` 启动 `gui.py`。
 
+打包 Windows EXE：
+
+```bat
+build_exe.bat
+```
+
+`build_exe.bat` 会安装打包依赖、运行测试和编译检查，然后输出 `dist\DanbooruDownload\DanbooruDownload.exe`。运行依赖放在 `win-x64` 文件夹，根目录只保留必要的 `Download` 下载文件夹。日常快速测试仍推荐使用 `start.bat`。
+
 ### 实机演示
 
 主界面：
@@ -85,11 +99,11 @@ start.bat
 
 ### 自动图片转换
 
-开启 `下载后自动转换图片格式` 后，原图仍保存在原下载目录，转换后的文件保存到同级 `jpg_webp` 文件夹：
+开启 `下载后自动转换图片格式` 后，原图仍保存在原下载目录，转换后的文件保存到原下载目录同级的 `原文件夹名_webp` 或 `原文件夹名_jpg` 文件夹：
 
 ```text
 Download/example/image.png
-Download/example/jpg_webp/image.webp
+Download/example_webp/image.webp
 ```
 
 可配置项：
@@ -98,12 +112,14 @@ Download/example/jpg_webp/image.webp
 - 质量：`1..100`
 - WebP 无损：仅 WebP 生效
 - 压缩程度：`0..6`
+- WebP 透明背景：`white`、`color`、`random`
+- WebP 彩色背景色：`#RRGGBB`，默认 `#ff4fd8`
 
 如果同时开启 TXT 标签导出，`.txt` 会跟随转换后的文件：
 
 ```text
-Download/example/jpg_webp/image.webp
-Download/example/jpg_webp/image.txt
+Download/example_webp/image.webp
+Download/example_webp/image.txt
 ```
 
 ### 同名 TXT 标签
@@ -137,6 +153,8 @@ auto_convert_format: webp
 auto_convert_quality: 95
 auto_convert_lossless: false
 auto_convert_effort: 6
+auto_convert_background_mode: color
+auto_convert_background_color: "#ff4fd8"
 ```
 
 然后运行：
@@ -245,6 +263,14 @@ start.bat
 
 `start.bat` creates or repairs `.venv`, installs missing dependencies, and launches `gui.py` with `pythonw`.
 
+To build the Windows EXE:
+
+```bat
+build_exe.bat
+```
+
+`build_exe.bat` installs build dependencies, runs tests and compile checks, then writes `dist\DanbooruDownload\DanbooruDownload.exe`. Runtime files are placed in `win-x64`, and the bundle root keeps only the necessary `Download` folder for downloaded files. For quick development testing, keep using `start.bat`.
+
 ### Screenshots
 
 Main interface:
@@ -288,6 +314,8 @@ auto_convert_format: webp
 auto_convert_quality: 95
 auto_convert_lossless: false
 auto_convert_effort: 6
+auto_convert_background_mode: color
+auto_convert_background_color: "#ff4fd8"
 ```
 
 Queue tasks are currently used by the GUI. The CLI loads common download settings, TXT tag settings, and image conversion settings.
@@ -316,6 +344,9 @@ DanbooruDownload/
 |-- docs/screenshots/          # README screenshots
 |-- tests/                     # Unit tests
 |-- start.bat                  # Windows launcher
+|-- build_exe.bat              # PyInstaller packaging script
+|-- DanbooruDownload.spec      # PyInstaller onedir build config
+|-- requirements-build.txt     # Packaging-only dependencies
 `-- requirements.txt           # Python dependencies
 ```
 

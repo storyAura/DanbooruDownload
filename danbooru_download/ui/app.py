@@ -3,6 +3,7 @@ import threading
 import queue
 import time
 import webbrowser
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,10 +15,14 @@ if sys.platform == "win32":
         pass
 
 import customtkinter as ctk
-from tkinter import filedialog, messagebox, font as tkfont
+from tkinter import PhotoImage, colorchooser, filedialog, messagebox, font as tkfont
 
 from danbooru_download.core.config import Config, QueueTaskConfig
 from danbooru_download.core.danbooru_client import DanbooruClient
+from danbooru_download.core.image_conversion import (
+    normalize_background_color,
+    normalize_background_mode,
+)
 from danbooru_download.core.formatter import (
     DEFAULT_TAG_TEXT_CATEGORIES,
     TAG_TEXT_CATEGORY_ORDER,
@@ -26,13 +31,19 @@ from danbooru_download.core.formatter import (
 from danbooru_download.core.downloader import Downloader
 from danbooru_download.locales import I18N, RATING_MAP_ZH, RATING_MAP_EN
 
-APP_DIR = Path(__file__).resolve().parents[2]
+def app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+APP_DIR = app_dir()
 DEFAULT_DOWNLOAD_DIR = APP_DIR / "Download"
 DEFAULT_CONFIG_PATH = APP_DIR / "default_config.yaml"
 DEFAULT_FILENAME_FORMAT = "{artist}_{id}.{ext}"
 VIDEO_EXTENSIONS = {"mp4", "webm", "zip"}
 LOG_DIVIDER = "=" * 50
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 GITHUB_URL = "https://github.com/storyAura/DanbooruDownload"
 DEFAULT_SITE_URL = "https://danbooru.donmai.us"
 SITE_PRESETS = {
@@ -44,6 +55,15 @@ SITE_PRESETS = {
     "Konachan": "https://konachan.com",
 }
 CUSTOM_SITE_LABEL = "Custom"
+
+
+def is_hex_background_color(value: str) -> bool:
+    return bool(re.fullmatch(r"#[0-9a-fA-F]{6}", str(value or "").strip()))
+
+
+def resource_path(*parts: str) -> Path:
+    return Path(getattr(sys, "_MEIPASS", APP_DIR)).joinpath(*parts)
+
 
 ICONS = {
     "title": "",
@@ -443,8 +463,12 @@ class SettingsDialog(ctk.CTkToplevel):
         self._on_save_default = on_save_default
         self._config = config
         self.t = I18N[lang]
+        self._last_conversion_is_webp = None
+        self._background_color_preview = normalize_background_color(
+            config.auto_convert_background_color
+        )
         self.title(self.t["settings_title"])
-        self.geometry("560x720")
+        self.geometry("560x780")
         self.resizable(False, False)
         self.configure(fg_color=COLORS["app_bg"])
         self.transient(parent)
@@ -560,6 +584,68 @@ class SettingsDialog(ctk.CTkToplevel):
             6,
             self._sync_conversion,
         )
+        row_bg = ctk.CTkFrame(card_misc.content, fg_color="transparent")
+        row_bg.pack(fill="x", pady=(0, 8))
+        ctk.CTkLabel(
+            row_bg,
+            text=self.t["auto_convert_background_mode"],
+            width=90,
+            anchor="w",
+            font=ui_font("body"),
+            text_color=COLORS["text_secondary"],
+        ).pack(side="left")
+        self.background_mode_var = ctk.StringVar(
+            value=self._background_mode_label(self._config.auto_convert_background_mode)
+        )
+        self.background_mode_control = ctk.CTkSegmentedButton(
+            row_bg,
+            values=[
+                self.t["background_mode_white"],
+                self.t["background_mode_color"],
+                self.t["background_mode_random"],
+            ],
+            variable=self.background_mode_var,
+            font=ui_font("body"),
+            command=lambda _value: self._sync_conversion(),
+        )
+        self.background_mode_control.pack(side="left", padx=(8, 0))
+
+        row_bg_color = ctk.CTkFrame(card_misc.content, fg_color="transparent")
+        row_bg_color.pack(fill="x", pady=(0, 8))
+        ctk.CTkLabel(
+            row_bg_color,
+            text=self.t["auto_convert_background_color"],
+            width=90,
+            anchor="w",
+            font=ui_font("body"),
+            text_color=COLORS["text_secondary"],
+        ).pack(side="left")
+        self.entry_bg_color = ctk.CTkEntry(
+            row_bg_color,
+            height=32,
+            width=130,
+            corner_radius=8,
+            border_color=COLORS["border"],
+            fg_color=COLORS["panel_alt"],
+            font=ui_font("body"),
+            text_color=COLORS["text_primary"],
+        )
+        self.entry_bg_color.insert(0, self._config.auto_convert_background_color)
+        self.entry_bg_color.bind("<KeyRelease>", self._on_background_color_entry)
+        self.entry_bg_color.pack(side="left", padx=(8, 0))
+        self.btn_bg_color = ctk.CTkButton(
+            row_bg_color,
+            text="",
+            width=34,
+            height=32,
+            corner_radius=8,
+            fg_color=self._background_color_preview,
+            hover_color=self._background_color_preview,
+            border_width=1,
+            border_color=COLORS["border"],
+            command=self._choose_background_color,
+        )
+        self.btn_bg_color.pack(side="left", padx=(8, 0))
         ctk.CTkLabel(
             card_misc.content,
             text=self.t["convert_output_hint"],
@@ -680,7 +766,15 @@ class SettingsDialog(ctk.CTkToplevel):
     def _sync_conversion(self):
         fmt = "webp" if self.convert_format_var.get() == self.t["convert_format_webp"] else "jpg"
         is_webp = fmt == "webp"
-        self.var_convert_lossless.configure(state="normal" if is_webp else "disabled")
+        background_mode = self._selected_background_mode()
+        if is_webp != self._last_conversion_is_webp:
+            state = "normal" if is_webp else "disabled"
+            self.var_convert_lossless.configure(state=state)
+            self.background_mode_control.configure(state=state)
+            self.entry_bg_color.configure(state=state)
+            self.btn_bg_color.configure(state=state)
+            self._last_conversion_is_webp = is_webp
+        self._sync_background_color_preview()
         self.lbl_convert_quality.configure(
             text=f"{self.t['auto_convert_quality']}: {self.var_convert_quality.get()}"
         )
@@ -693,11 +787,44 @@ class SettingsDialog(ctk.CTkToplevel):
             int(self.var_convert_quality.get()),
             bool(self.var_convert_lossless.get()),
             int(self.var_convert_effort.get()),
+            background_mode,
+            self.entry_bg_color.get().strip(),
         )
 
     def _save_default(self):
         self._sync_conversion()
         self._on_save_default()
+
+    def _on_background_color_entry(self, _event=None):
+        self.background_mode_var.set(self.t["background_mode_color"])
+        self._sync_background_color_preview()
+        self._sync_conversion()
+
+    def _choose_background_color(self):
+        initial_color = normalize_background_color(self.entry_bg_color.get())
+        _rgb, hex_color = colorchooser.askcolor(
+            color=initial_color,
+            title=self.t["choose_background_color"],
+            parent=self,
+        )
+        if not hex_color:
+            return
+        self.entry_bg_color.configure(state="normal")
+        self.entry_bg_color.delete(0, "end")
+        self.entry_bg_color.insert(0, normalize_background_color(hex_color))
+        self.background_mode_var.set(self.t["background_mode_color"])
+        self._sync_background_color_preview()
+        self._sync_conversion()
+
+    def _sync_background_color_preview(self):
+        color = self.entry_bg_color.get().strip()
+        if not is_hex_background_color(color):
+            return
+        self._background_color_preview = color.lower()
+        self.btn_bg_color.configure(
+            fg_color=self._background_color_preview,
+            hover_color=self._background_color_preview,
+        )
 
     def _build_slider_row(self, parent, label, variable, from_, to, command):
         row = ctk.CTkFrame(parent, fg_color="transparent")
@@ -730,6 +857,23 @@ class SettingsDialog(ctk.CTkToplevel):
         slider.pack(side="left", fill="x", expand=True, padx=(8, 0))
         return value_label
 
+    def _background_mode_label(self, mode: str) -> str:
+        mode = normalize_background_mode(mode)
+        labels = {
+            "white": self.t["background_mode_white"],
+            "color": self.t["background_mode_color"],
+            "random": self.t["background_mode_random"],
+        }
+        return labels[mode]
+
+    def _selected_background_mode(self) -> str:
+        labels = {
+            self.t["background_mode_white"]: "white",
+            self.t["background_mode_color"]: "color",
+            self.t["background_mode_random"]: "random",
+        }
+        return labels.get(self.background_mode_var.get(), "color")
+
 class DanbooruGUI(ctk.CTk):
 
     def __init__(self):
@@ -739,6 +883,7 @@ class DanbooruGUI(ctk.CTk):
         self._lang = "zh"
         self.t = I18N[self._lang]
         self.title(self.t["title"])
+        self._set_window_icon()
         self.geometry("1500x820")
         self.minsize(1280, 720)
         self.configure(fg_color=COLORS["app_bg"])
@@ -755,6 +900,8 @@ class DanbooruGUI(ctk.CTk):
         self._auto_convert_quality = 95
         self._auto_convert_lossless = False
         self._auto_convert_effort = 6
+        self._auto_convert_background_mode = "color"
+        self._auto_convert_background_color = "#ff4fd8"
         self.site_preset_popup = None
         self.site_preset_popup_frame = None
         self.rating_popup = None
@@ -762,6 +909,24 @@ class DanbooruGUI(ctk.CTk):
         self._build_ui()
         self._load_default_config()
         self._poll_queue()
+
+    def _set_window_icon(self):
+        icon_ico_path = resource_path("danbooru_download", "assets", "app_icon.ico")
+        icon_png_path = resource_path("danbooru_download", "assets", "app_icon.png")
+        try:
+            if icon_ico_path.exists():
+                try:
+                    self.iconbitmap(default=str(icon_ico_path))
+                except Exception:
+                    self.iconbitmap(str(icon_ico_path))
+        except Exception:
+            pass
+        try:
+            if icon_png_path.exists():
+                self._window_icon = PhotoImage(file=str(icon_png_path))
+                self.iconphoto(True, self._window_icon)
+        except Exception:
+            pass
 
     @property
     def _rating_map(self):
@@ -1542,6 +1707,8 @@ class DanbooruGUI(ctk.CTk):
             auto_convert_quality=config.auto_convert_quality,
             auto_convert_lossless=config.auto_convert_lossless,
             auto_convert_effort=config.auto_convert_effort,
+            auto_convert_background_mode=config.auto_convert_background_mode,
+            auto_convert_background_color=config.auto_convert_background_color,
         )
         dl.download_batch(posts)
 
@@ -1584,12 +1751,16 @@ class DanbooruGUI(ctk.CTk):
         quality: int,
         lossless: bool,
         effort: int,
+        background_mode: str,
+        background_color: str,
     ):
         self._auto_convert_images = enabled
         self._auto_convert_format = fmt if fmt in {"jpg", "webp"} else "jpg"
         self._auto_convert_quality = quality if 1 <= quality <= 100 else 95
         self._auto_convert_lossless = lossless
         self._auto_convert_effort = effort if 0 <= effort <= 6 else 6
+        self._auto_convert_background_mode = normalize_background_mode(background_mode)
+        self._auto_convert_background_color = normalize_background_color(background_color)
 
     def _update_texts(self, old_rating_val: str = ""):
         t = self.t
@@ -1728,6 +1899,8 @@ class DanbooruGUI(ctk.CTk):
             auto_convert_quality=self._auto_convert_quality,
             auto_convert_lossless=self._auto_convert_lossless,
             auto_convert_effort=self._auto_convert_effort,
+            auto_convert_background_mode=self._auto_convert_background_mode,
+            auto_convert_background_color=self._auto_convert_background_color,
             queue_tasks=[
                 QueueTaskConfig(
                     tags=item.tags,
@@ -1790,6 +1963,12 @@ class DanbooruGUI(ctk.CTk):
         self._auto_convert_quality = config.auto_convert_quality
         self._auto_convert_lossless = config.auto_convert_lossless
         self._auto_convert_effort = config.auto_convert_effort
+        self._auto_convert_background_mode = normalize_background_mode(
+            config.auto_convert_background_mode
+        )
+        self._auto_convert_background_color = normalize_background_color(
+            config.auto_convert_background_color
+        )
         self._sync_tag_txt_controls()
         is_custom = config.filename_format != DEFAULT_FILENAME_FORMAT
         if is_custom:
@@ -2001,6 +2180,8 @@ class DanbooruGUI(ctk.CTk):
                     auto_convert_quality=config.auto_convert_quality,
                     auto_convert_lossless=config.auto_convert_lossless,
                     auto_convert_effort=config.auto_convert_effort,
+                    auto_convert_background_mode=config.auto_convert_background_mode,
+                    auto_convert_background_color=config.auto_convert_background_color,
                 )
                 stats = dl.download_batch(posts)
                 self._log_message("")

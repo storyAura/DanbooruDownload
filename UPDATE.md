@@ -1,64 +1,55 @@
 # 版本更新说明
 
-本文用于快速查看当前版本相对上一版的主要变化。
+本文记录 DanbooruDownload 当前版本相对上一版的主要变化。
 
-对比入口：
+## v1.2
 
-- 上一版基准：提交 `7aad79a`
-- 当前版本：`main` 分支
-- GitHub 对比：[7aad79a...main](https://github.com/storyAura/DanbooruDownload/compare/7aad79a...main)
+### 自动图片转换
 
-## 主要变化
+- WebP 转换现在支持透明 PNG 背景合成，可选择白色、固定彩色或随机鲜艳色背景。
+- 固定彩色背景默认使用 `#ff4fd8`，并支持在设置页通过颜色选择器调整。
+- 转换输出目录不再固定为 `jpg_webp`，现在会保存到原下载文件夹同级目录：
+  - WebP：`原文件夹名_webp`
+  - JPG：`原文件夹名_jpg`
+- TXT 标签文件会跟随转换后的图片保存到对应转换目录。
 
-### 1. 项目结构重组
+### 设置界面
 
-- 新增 `danbooru_download/` 包，将核心逻辑、GUI、语言文件分层放置。
-- 根目录的 `gui.py`、`main.py`、`config.py`、`downloader.py` 等文件保留为兼容入口，避免影响旧的启动方式和已有导入。
-- 核心代码现在集中在：
-  - `danbooru_download/core/`
-  - `danbooru_download/ui/`
-  - `danbooru_download/locales/`
+- 设置页新增 WebP 背景模式选择：白色、彩色、随机。
+- 彩色背景旁新增颜色选择按钮，可直接打开系统颜色选择器。
+- 优化切换背景模式时的控件刷新，减少闪烁和布局跳动。
+- 更新转换格式设置截图，展示新的背景和颜色控件。
 
-### 2. 图片格式自动转换
+### Logo 与窗口图标
 
-- 新增下载后自动转换静态图片功能。
-- 支持输出 `JPG` 和 `WebP`。
-- 支持质量、WebP 无损、压缩程度设置。
-- 转换后的图片保存到 `jpg_webp` 文件夹。
-- 如果开启 TXT 标签，TXT 会跟随转换后的图片保存。
+- 重新设计应用 Logo：圆角 `D` 加下载箭头，表达 DanbooruDownload 和下载含义。
+- 替换窗口标题栏、任务栏、EXE 图标和资源文件中的图标。
+- 优化 16/24/32 小尺寸图标，让标题栏显示更清晰。
 
-### 3. 设置窗口调整
+### Windows EXE 打包
 
-- 移除了顶部单独的软件详情按钮。
-- 软件详情移动到设置窗口底部的独立区域。
-- 设置窗口新增项目说明和 GitHub Star 提示。
-- 杂项区域集中放置图片转换和默认配置相关设置。
+- 新增 PyInstaller onedir 打包流程，输出：
+  - `dist\DanbooruDownload\DanbooruDownload.exe`
+  - `dist\DanbooruDownload\win-x64`
+  - `dist\DanbooruDownload\Download`
+- 打包根目录只保留必要的 `Download` 文件夹，运行依赖集中在 `win-x64`。
+- `start.bat` 保持快速开发/测试启动方式，`build_exe.bat` 用于正式打包。
 
-### 4. 默认配置
+### 配置和文档
 
-- 设置窗口可保存当前配置为默认配置。
-- 下次启动时会自动加载默认配置。
-- 默认配置包含下载设置、TXT 标签设置、队列任务和图片转换设置。
+- YAML 配置新增：
+  - `auto_convert_background_mode`
+  - `auto_convert_background_color`
+- README 更新 v1.2 简要说明、转换路径示例和打包说明。
+- `UPDATE.md` 用于记录完整版本变化。
 
-### 5. 文档和截图
+### 验证
 
-- README 已更新为当前功能和新项目结构。
-- 更新了主界面截图和站点预设截图。
-- 新增图片转换设置截图。
-- README 顶部添加本更新说明入口。
-
-### 6. 测试覆盖
-
-- 新增配置读取和转换选项测试。
-- 新增下载器转换行为测试。
-- 新增图片转换参数测试。
-- 新增包结构和兼容入口测试。
-
-## 验证方式
+本版本已通过以下检查：
 
 ```bash
 .\.venv\Scripts\python.exe -m unittest discover -s tests
-.\.venv\Scripts\python.exe -m compileall danbooru_download gui.py main.py locales tests
+.\.venv\Scripts\python.exe -m compileall danbooru_download config.py danbooru_client.py downloader.py formatter.py gui.py main.py
 ```
 
-当前版本已通过以上验证。
+并完成 Windows EXE 打包与启动烟测。
