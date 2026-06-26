@@ -206,6 +206,8 @@ def main():
         auto_convert_quality=config.auto_convert_quality,
         auto_convert_lossless=config.auto_convert_lossless,
         auto_convert_effort=config.auto_convert_effort,
+        auto_convert_background_mode=config.auto_convert_background_mode,
+        auto_convert_background_color=config.auto_convert_background_color,
     )
 
     start_time = time.time()

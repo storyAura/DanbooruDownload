@@ -12,6 +12,7 @@ Download/
 dist/
 build/
 *.spec
+!DanbooruDownload.spec
 *.exe
 *.log
 .DS_Store

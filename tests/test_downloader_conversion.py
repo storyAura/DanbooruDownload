@@ -22,10 +22,11 @@ def create_rgba_png(path: Path) -> None:
 
 
 class DownloaderConversionTests(unittest.TestCase):
-    def test_converts_image_to_jpg_webp_folder(self):
+    def test_converts_image_to_sibling_jpg_folder_named_after_source_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
-            save_dir = Path(tmp)
+            save_dir = Path(tmp) / "dracaena_sunbringer"
             source = save_dir / "sample.png"
+            save_dir.mkdir()
             create_rgba_png(source)
             downloader = Downloader(
                 save_dir=save_dir,
@@ -35,14 +36,18 @@ class DownloaderConversionTests(unittest.TestCase):
 
             converted = downloader._convert_image(source)
 
-            self.assertEqual(converted, save_dir / "jpg_webp" / "sample.jpg")
+            self.assertEqual(
+                converted,
+                save_dir.parent / "dracaena_sunbringer_jpg" / "sample.jpg",
+            )
             self.assertTrue(converted.exists())
             self.assertTrue(source.exists())
 
-    def test_converts_image_to_webp_webp_folder(self):
+    def test_converts_image_to_sibling_webp_folder_named_after_source_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
-            save_dir = Path(tmp)
+            save_dir = Path(tmp) / "dracaena_sunbringer"
             source = save_dir / "sample.png"
+            save_dir.mkdir()
             create_rgba_png(source)
             downloader = Downloader(
                 save_dir=save_dir,
@@ -52,13 +57,29 @@ class DownloaderConversionTests(unittest.TestCase):
 
             converted = downloader._convert_image(source)
 
-            self.assertEqual(converted, save_dir / "jpg_webp" / "sample.webp")
+            self.assertEqual(
+                converted,
+                save_dir.parent / "dracaena_sunbringer_webp" / "sample.webp",
+            )
             self.assertTrue(converted.exists())
+
+    def test_passes_webp_background_settings_to_converter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            downloader = Downloader(
+                save_dir=Path(tmp),
+                auto_convert_images=True,
+                auto_convert_format="webp",
+                auto_convert_background_mode="random",
+                auto_convert_background_color="#00ff66",
+            )
+
+            self.assertEqual(downloader.conversion_config.background_mode, "random")
+            self.assertEqual(downloader.conversion_config.background_color, "#00ff66")
 
     def test_tag_txt_follows_converted_image_path(self):
         with tempfile.TemporaryDirectory() as tmp:
-            save_dir = Path(tmp)
-            converted = save_dir / "jpg_webp" / "sample.jpg"
+            save_dir = Path(tmp) / "dracaena_sunbringer"
+            converted = save_dir.parent / "dracaena_sunbringer_jpg" / "sample.jpg"
             downloader = Downloader(save_dir=save_dir, save_tag_txt=True)
 
             downloader._write_tag_txt(converted, POST)
@@ -76,12 +97,13 @@ class DownloaderConversionTests(unittest.TestCase):
             downloader._write_tag_txt(original, POST)
 
             self.assertTrue((save_dir / "sample.txt").exists())
-            self.assertFalse((save_dir / "jpg_webp" / "sample.txt").exists())
+            self.assertFalse((save_dir.parent / f"{save_dir.name}_jpg" / "sample.txt").exists())
 
     def test_existing_original_is_converted_when_target_is_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
-            save_dir = Path(tmp)
+            save_dir = Path(tmp) / "dracaena_sunbringer"
             source = save_dir / "1001.png"
+            save_dir.mkdir()
             create_rgba_png(source)
             downloader = Downloader(
                 save_dir=save_dir,
@@ -101,8 +123,12 @@ class DownloaderConversionTests(unittest.TestCase):
             )
 
             self.assertTrue(result)
-            self.assertTrue((save_dir / "jpg_webp" / "1001.jpg").exists())
-            self.assertTrue((save_dir / "jpg_webp" / "1001.txt").exists())
+            self.assertTrue(
+                (save_dir.parent / "dracaena_sunbringer_jpg" / "1001.jpg").exists()
+            )
+            self.assertTrue(
+                (save_dir.parent / "dracaena_sunbringer_jpg" / "1001.txt").exists()
+            )
 
 
 if __name__ == "__main__":

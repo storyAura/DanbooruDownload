@@ -11,6 +11,8 @@ from danbooru_download.core.formatter import (
     normalize_tag_text_categories,
 )
 from danbooru_download.core.image_conversion import (
+    normalize_background_color,
+    normalize_background_mode,
     normalize_convert_format,
     normalize_effort,
     normalize_quality,
@@ -87,6 +89,8 @@ class Config:
     auto_convert_quality: int = 95
     auto_convert_lossless: bool = False
     auto_convert_effort: int = 6
+    auto_convert_background_mode: str = "color"
+    auto_convert_background_color: str = "#ff4fd8"
 
     def build_tags_query(self) -> str:
         """Build the final tags query string including rating, score, and blocked tags."""
@@ -140,6 +144,12 @@ class Config:
         )
         data["auto_convert_effort"] = normalize_effort(
             data.get("auto_convert_effort"), default=6
+        )
+        data["auto_convert_background_mode"] = normalize_background_mode(
+            data.get("auto_convert_background_mode")
+        )
+        data["auto_convert_background_color"] = normalize_background_color(
+            data.get("auto_convert_background_color")
         )
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 

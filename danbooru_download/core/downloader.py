@@ -50,6 +50,8 @@ class Downloader:
         auto_convert_quality: int = 95,
         auto_convert_lossless: bool = False,
         auto_convert_effort: int = 6,
+        auto_convert_background_mode: str = "color",
+        auto_convert_background_color: str = "#ff4fd8",
     ):
         """
         Args:
@@ -71,6 +73,8 @@ class Downloader:
             auto_convert_quality: Target quality from 1 to 100.
             auto_convert_lossless: Use WebP lossless mode.
             auto_convert_effort: Compression effort from 0 to 6.
+            auto_convert_background_mode: WebP transparency background mode.
+            auto_convert_background_color: WebP fixed background color as #RRGGBB.
         """
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -94,6 +98,8 @@ class Downloader:
             quality=auto_convert_quality,
             lossless=auto_convert_lossless,
             effort=auto_convert_effort,
+            background_mode=auto_convert_background_mode,
+            background_color=auto_convert_background_color,
         )
         self.auto_convert_format = self.conversion_config.format
         self.image_converter = ImageConverter(self.conversion_config)
@@ -149,7 +155,7 @@ class Downloader:
         return normalize_convert_format(value)
 
     def _converted_path(self, image_path: Path) -> Path:
-        """Return the converted image path under the jpg_webp subfolder."""
+        """Return the converted image path in the source folder's sibling output folder."""
         return self.image_converter.converted_path(image_path)
 
     def _convert_image(self, image_path: Path) -> Path:
@@ -307,7 +313,7 @@ class Downloader:
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
-            headers={"User-Agent": "DanbooruDownload/1.1.0"},
+            headers={"User-Agent": "DanbooruDownload/1.2.0"},
             limits=httpx.Limits(
                 max_connections=self.max_concurrent + 4,
                 max_keepalive_connections=self.max_concurrent + 2,
