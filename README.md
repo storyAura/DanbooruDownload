@@ -4,6 +4,10 @@
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
+## 版本更新
+
+本次版本的主要变化和与上一版的区别见 [UPDATE.md](UPDATE.md)。
+
 ## 中文说明
 
 ### 主要功能
