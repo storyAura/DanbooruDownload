@@ -4,9 +4,9 @@
 
 对比入口：
 
-- 上一版基准：`main` 分支，提交 `7aad79a`
-- 当前更新：`codex/booru-sites-ui-clarity` 分支，提交 `ef4ed7f`
-- GitHub 对比：[main...codex/booru-sites-ui-clarity](https://github.com/storyAura/DanbooruDownload/compare/main...codex/booru-sites-ui-clarity)
+- 上一版基准：提交 `7aad79a`
+- 当前版本：`main` 分支
+- GitHub 对比：[7aad79a...main](https://github.com/storyAura/DanbooruDownload/compare/7aad79a...main)
 
 ## 主要变化
 
