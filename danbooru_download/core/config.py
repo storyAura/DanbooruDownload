@@ -91,6 +91,8 @@ class Config:
     auto_convert_effort: int = 6
     auto_convert_background_mode: str = "color"
     auto_convert_background_color: str = "#ff4fd8"
+    auto_convert_keep_original: bool = True
+    ui_theme: str = "light"
 
     def build_tags_query(self) -> str:
         """Build the final tags query string including rating, score, and blocked tags."""
@@ -151,6 +153,11 @@ class Config:
         data["auto_convert_background_color"] = normalize_background_color(
             data.get("auto_convert_background_color")
         )
+        data["auto_convert_keep_original"] = _as_bool(
+            data.get("auto_convert_keep_original"), default=True
+        )
+        theme = str(data.get("ui_theme", "light") or "light").strip().lower()
+        data["ui_theme"] = theme if theme in {"light", "dark"} else "light"
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     def to_yaml(self, path: str | Path) -> None:

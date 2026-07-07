@@ -9,15 +9,18 @@ from urllib.parse import unquote, urlparse
 import httpx
 
 
-APP_USER_AGENT = "DanbooruDownload/1.2.0"
+APP_USER_AGENT = "DanbooruDownload/1.3.0"
 PROFILE_DANBOORU = "danbooru"
 PROFILE_MOEBOORU = "moebooru"
 PROFILE_GELBOORU = "gelbooru"
+PROFILE_NOZOMI = "nozomi"
 
 
 def _detect_profile(base_url: str) -> str:
     """Return the API profile for a supported booru host."""
     host = urlparse(base_url).netloc.lower()
+    if "nozomi.la" in host:
+        return PROFILE_NOZOMI
     if "gelbooru.com" in host:
         return PROFILE_GELBOORU
     if "yande.re" in host or "konachan.com" in host:
@@ -65,6 +68,46 @@ def _normalize_created_at(value):
     return value or ""
 
 
+def _absolute_url(url: str, base_url: str = "") -> str:
+    """Normalize protocol-relative and site-relative media URLs."""
+    url = str(url or "").strip()
+    if not url:
+        return ""
+    if url.startswith("//"):
+        return f"https:{url}"
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    if url.startswith("/") and base_url:
+        return f"{base_url.rstrip('/')}{url}"
+    return url
+
+
+def _gelbooru_directory(post: dict) -> str:
+    directory = str(post.get("directory") or "").strip()
+    if directory:
+        return directory
+    md5 = str(post.get("md5") or post.get("hash") or "").strip()
+    if len(md5) >= 4:
+        return f"{md5[:2]}/{md5[2:4]}"
+    return ""
+
+
+def _resolve_media_url(post: dict, profile: str, base_url: str) -> str:
+    """Resolve the best absolute download URL for a booru post."""
+    for key in ("file_url", "jpeg_url", "sample_url", "large_file_url"):
+        url = _absolute_url(post.get(key, ""), base_url)
+        if url:
+            return url
+
+    if profile == PROFILE_GELBOORU:
+        directory = _gelbooru_directory(post)
+        image = str(post.get("image") or "").strip()
+        if directory and image:
+            return f"https://img3.gelbooru.com/images/{directory}/{image}"
+
+    return ""
+
+
 def _extract_result_posts(result) -> list[dict]:
     """Extract a post list from common booru JSON response shapes."""
     if isinstance(result, list):
@@ -80,14 +123,21 @@ def _extract_result_posts(result) -> list[dict]:
     return []
 
 
-def _normalize_post(post: dict) -> dict:
+def _normalize_post(
+    post: dict,
+    profile: str = PROFILE_DANBOORU,
+    base_url: str = "",
+) -> dict:
     """Normalize supported booru post fields to the app's Danbooru-like shape."""
     normalized = dict(post)
     raw_tags = normalized.get("tag_string") or normalized.get("tags") or ""
     tag_string = _coerce_tags(raw_tags)
 
-    file_url = normalized.get("file_url") or normalized.get("jpeg_url") or normalized.get("sample_url") or ""
-    large_file_url = normalized.get("large_file_url") or normalized.get("jpeg_url") or file_url
+    file_url = _resolve_media_url(normalized, profile, base_url)
+    large_file_url = _absolute_url(
+        normalized.get("large_file_url") or normalized.get("jpeg_url") or "",
+        base_url,
+    ) or file_url
     file_ext = normalized.get("file_ext") or _file_ext_from_url(file_url) or _file_ext_from_url(large_file_url)
     width = _coerce_int(normalized.get("image_width", normalized.get("width")), 0)
     height = _coerce_int(normalized.get("image_height", normalized.get("height")), 0)
@@ -137,6 +187,7 @@ class DanbooruClient:
     ):
         self.base_url = base_url.rstrip("/")
         self.profile = _detect_profile(self.base_url)
+        self.timeout = timeout
         self.username = username
         self.api_key = api_key
         self.auth = None
@@ -197,8 +248,8 @@ class DanbooruClient:
                 if status == 401:
                     if self.profile == PROFILE_GELBOORU:
                         raise RuntimeError(
-                            "Gelbooru authentication failed. Gelbooru may require user_id "
-                            "in the Username field and api_key in the API Key field."
+                            "Gelbooru authentication failed. Open Settings -> API Credentials, "
+                            "enter your numeric User ID and API Key from the Gelbooru account Options page."
                         ) from e
                     raise RuntimeError("Authentication failed. Check username and API key.") from e
                 if status == 403:
@@ -236,6 +287,15 @@ class DanbooruClient:
         Returns:
             List of normalized post dicts from the API.
         """
+        if self.profile == PROFILE_NOZOMI:
+            from danbooru_download.core.nozomi_client import NozomiClient
+
+            with NozomiClient(timeout=self.timeout) as nozomi:
+                return [
+                    _normalize_post(post, self.profile, self.base_url)
+                    for post in nozomi.search_all(tags=tags, max_posts=limit, on_log=None)
+                ]
+
         if self.profile == PROFILE_GELBOORU:
             params = {
                 "page": "dapi",
@@ -262,7 +322,10 @@ class DanbooruClient:
             }
             result = self._request("/posts.json", params)
 
-        return [_normalize_post(post) for post in _extract_result_posts(result)]
+        return [
+            _normalize_post(post, self.profile, self.base_url)
+            for post in _extract_result_posts(result)
+        ]
 
     def search_all(
         self,
@@ -271,6 +334,14 @@ class DanbooruClient:
         on_log: Optional[Callable[[str], None]] = None,
     ) -> Generator[dict, None, None]:
         """Search and paginate through all results up to max_posts."""
+        if self.profile == PROFILE_NOZOMI:
+            from danbooru_download.core.nozomi_client import NozomiClient
+
+            with NozomiClient(timeout=self.timeout) as nozomi:
+                for post in nozomi.search_all(tags=tags, max_posts=max_posts, on_log=on_log):
+                    yield _normalize_post(post, self.profile, self.base_url)
+            return
+
         fetched = 0
         page: int | str = 0 if self.profile == PROFILE_GELBOORU else 1
         per_page = min(max_posts, self._max_page_limit())
@@ -306,18 +377,29 @@ class DanbooruClient:
 
     def get_post(self, post_id: int) -> dict:
         """Get a single post by ID."""
+        if self.profile == PROFILE_NOZOMI:
+            from danbooru_download.core.nozomi_client import NozomiClient
+
+            with NozomiClient(timeout=self.timeout) as nozomi:
+                post = nozomi.fetch_post(post_id)
+                return _normalize_post(post, self.profile, self.base_url) if post else {}
+
         if self.profile == PROFILE_GELBOORU:
             result = self._request(
                 "/index.php",
                 {"page": "dapi", "s": "post", "q": "index", "json": "1", "id": post_id},
             )
             posts = _extract_result_posts(result)
-            return _normalize_post(posts[0]) if posts else {}
+            return _normalize_post(posts[0], self.profile, self.base_url) if posts else {}
         if self.profile == PROFILE_MOEBOORU:
             result = self._request("/post/show.json", {"id": post_id})
         else:
             result = self._request(f"/posts/{post_id}.json")
-        return _normalize_post(result) if isinstance(result, dict) else {}
+        return (
+            _normalize_post(result, self.profile, self.base_url)
+            if isinstance(result, dict)
+            else {}
+        )
 
     def close(self):
         """Close the HTTP client."""

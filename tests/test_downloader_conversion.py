@@ -130,6 +130,42 @@ class DownloaderConversionTests(unittest.TestCase):
                 (save_dir.parent / "dracaena_sunbringer_jpg" / "1001.txt").exists()
             )
 
+    def test_keep_original_false_removes_source_after_conversion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            save_dir = Path(tmp) / "sample_folder"
+            source = save_dir / "sample.png"
+            save_dir.mkdir()
+            create_rgba_png(source)
+            downloader = Downloader(
+                save_dir=save_dir,
+                auto_convert_images=True,
+                auto_convert_format="jpg",
+                auto_convert_keep_original=False,
+            )
+
+            converted = downloader._finalize_converted(source)
+
+            self.assertTrue(converted.exists())
+            self.assertFalse(source.exists())
+
+    def test_keep_original_true_preserves_source_after_conversion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            save_dir = Path(tmp) / "sample_folder"
+            source = save_dir / "sample.png"
+            save_dir.mkdir()
+            create_rgba_png(source)
+            downloader = Downloader(
+                save_dir=save_dir,
+                auto_convert_images=True,
+                auto_convert_format="jpg",
+                auto_convert_keep_original=True,
+            )
+
+            converted = downloader._finalize_converted(source)
+
+            self.assertTrue(converted.exists())
+            self.assertTrue(source.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,9 +21,22 @@ if sys.platform == "win32":
         pass
 
 from danbooru_download.core.config import Config
+from danbooru_download.core.credentials import (
+    CredentialsStore,
+    default_credentials_path,
+)
 from danbooru_download.core.danbooru_client import DanbooruClient
 from danbooru_download.core.formatter import FilenameFormatter
 from danbooru_download.core.downloader import Downloader
+
+
+def _app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+
+DEFAULT_CREDENTIALS_PATH = default_credentials_path(_app_dir())
 
 
 BANNER = """
@@ -135,6 +148,14 @@ def build_config(args: argparse.Namespace) -> Config:
     if args.timeout != 30.0:
         config.timeout = args.timeout
 
+    store = CredentialsStore(DEFAULT_CREDENTIALS_PATH)
+    store.load()
+    store.apply_to_config(
+        config,
+        override_username=args.username,
+        override_api_key=args.api_key,
+    )
+
     return config
 
 
@@ -208,6 +229,8 @@ def main():
         auto_convert_effort=config.auto_convert_effort,
         auto_convert_background_mode=config.auto_convert_background_mode,
         auto_convert_background_color=config.auto_convert_background_color,
+        auto_convert_keep_original=config.auto_convert_keep_original,
+        referer_base=config.base_url,
     )
 
     start_time = time.time()

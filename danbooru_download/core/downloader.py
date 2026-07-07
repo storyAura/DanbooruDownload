@@ -23,6 +23,18 @@ from danbooru_download.core.image_conversion import (
 )
 
 
+APP_USER_AGENT = "DanbooruDownload/1.3.0"
+IMAGE_MAGIC_PREFIXES = (
+    b"\xff\xd8\xff",
+    b"\x89PNG\r\n\x1a\n",
+    b"GIF87a",
+    b"GIF89a",
+    b"RIFF",
+    b"\x00\x00\x00\x18ftyp",
+    b"\x00\x00\x00\x20ftyp",
+)
+
+
 class Downloader:
     """Download images from Danbooru posts concurrently.
 
@@ -52,6 +64,8 @@ class Downloader:
         auto_convert_effort: int = 6,
         auto_convert_background_mode: str = "color",
         auto_convert_background_color: str = "#ff4fd8",
+        auto_convert_keep_original: bool = True,
+        referer_base: str = "",
     ):
         """
         Args:
@@ -75,9 +89,12 @@ class Downloader:
             auto_convert_effort: Compression effort from 0 to 6.
             auto_convert_background_mode: WebP transparency background mode.
             auto_convert_background_color: WebP fixed background color as #RRGGBB.
+            auto_convert_keep_original: Keep the original image after conversion.
+            referer_base: Site base URL used as Referer when downloading media files.
         """
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.referer_base = referer_base.rstrip("/") if referer_base else ""
         self.formatter = formatter or FilenameFormatter()
         self.max_concurrent = max_concurrent
         self.skip_existing = skip_existing
@@ -93,6 +110,7 @@ class Downloader:
             escape_special_chars=tag_txt_escape_special_chars,
         )
         self.auto_convert_images = auto_convert_images
+        self.auto_convert_keep_original = auto_convert_keep_original
         self.conversion_config = ImageConversionConfig(
             format=auto_convert_format,
             quality=auto_convert_quality,
@@ -162,6 +180,14 @@ class Downloader:
         """Convert a downloaded static image to the configured target format."""
         return self.image_converter.convert(image_path)
 
+    def _finalize_converted(self, filepath: Path) -> Path:
+        """Convert a downloaded image and optionally remove the original file."""
+        final_path = self._convert_image(filepath)
+        if not self.auto_convert_keep_original:
+            filepath.unlink(missing_ok=True)
+            self._log(f"  Removed original: {filepath.name}")
+        return final_path
+
     def _write_tag_txt(self, image_path: Path, post: dict) -> None:
         """Write a same-name .txt file for selected Danbooru tag categories."""
         if not self.save_tag_txt:
@@ -184,9 +210,25 @@ class Downloader:
             except Exception:
                 pass
 
+    def _looks_like_image(self, filepath: Path) -> bool:
+        """Return True when the file header looks like a supported image."""
+        try:
+            with open(filepath, "rb") as f:
+                header = f.read(12)
+        except OSError:
+            return False
+        if not header:
+            return False
+        return any(
+            header.startswith(prefix) or prefix in header[:16]
+            for prefix in IMAGE_MAGIC_PREFIXES
+        )
+
     def _already_exists(self, filepath: Path, post: dict) -> bool:
         """Check if file already exists and matches the expected MD5."""
         if not filepath.exists():
+            return False
+        if filepath.stat().st_size == 0:
             return False
         if not self.skip_existing:
             return False
@@ -233,9 +275,22 @@ class Downloader:
             self._report_progress()
             return True
 
-        if self._already_exists(filepath, post):
+        if self.auto_convert_images and not self.auto_convert_keep_original:
+            if self._already_exists(filepath, post) and self.skip_existing:
+                if not final_path.exists():
+                    self._finalize_converted(filepath)
+                else:
+                    filepath.unlink(missing_ok=True)
+                self._write_tag_txt(final_path, post)
+                self.skipped += 1
+                self._log(f"  Skipped #{post.get('id', '?')}: already exists")
+                if progress:
+                    progress.update(1)
+                self._report_progress()
+                return True
+        elif self._already_exists(filepath, post):
             if self.auto_convert_images and not final_path.exists():
-                final_path = self._convert_image(filepath)
+                final_path = self._finalize_converted(filepath)
             self._write_tag_txt(final_path, post)
             self.skipped += 1
             self._log(f"  Skipped #{post.get('id', '?')}: already exists")
@@ -266,9 +321,17 @@ class Downloader:
                                 f.write(chunk)
                                 self._track_bytes(len(chunk))
 
+                        if tmp_path.stat().st_size == 0:
+                            tmp_path.unlink(missing_ok=True)
+                            raise RuntimeError("Downloaded file is empty")
+
+                        if not self._looks_like_image(tmp_path):
+                            tmp_path.unlink(missing_ok=True)
+                            raise RuntimeError("Downloaded file is not a valid image")
+
                     tmp_path.rename(filepath)
                     if self.auto_convert_images:
-                        final_path = self._convert_image(filepath)
+                        final_path = self._finalize_converted(filepath)
                     self._write_tag_txt(final_path, post)
 
                     self.downloaded += 1
@@ -313,7 +376,10 @@ class Downloader:
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
-            headers={"User-Agent": "DanbooruDownload/1.2.0"},
+            headers={
+                "User-Agent": APP_USER_AGENT,
+                **({"Referer": f"{self.referer_base}/"} if self.referer_base else {}),
+            },
             limits=httpx.Limits(
                 max_connections=self.max_concurrent + 4,
                 max_keepalive_connections=self.max_concurrent + 2,

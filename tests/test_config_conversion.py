@@ -36,6 +36,7 @@ class ConfigConversionTests(unittest.TestCase):
         self.assertEqual(loaded.auto_convert_effort, 6)
         self.assertEqual(loaded.auto_convert_background_mode, "white")
         self.assertEqual(loaded.auto_convert_background_color, "#00ff66")
+        self.assertTrue(loaded.auto_convert_keep_original)
 
     def test_invalid_conversion_options_fall_back_to_safe_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -50,6 +51,7 @@ class ConfigConversionTests(unittest.TestCase):
                         "auto_convert_effort: 99",
                         "auto_convert_background_mode: stripes",
                         "auto_convert_background_color: hotpink",
+                        "auto_convert_keep_original: false",
                     ]
                 ),
                 encoding="utf-8",
@@ -64,6 +66,7 @@ class ConfigConversionTests(unittest.TestCase):
         self.assertEqual(loaded.auto_convert_effort, 6)
         self.assertEqual(loaded.auto_convert_background_mode, "color")
         self.assertEqual(loaded.auto_convert_background_color, "#ff4fd8")
+        self.assertFalse(loaded.auto_convert_keep_original)
 
 
 if __name__ == "__main__":

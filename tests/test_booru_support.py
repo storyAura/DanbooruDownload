@@ -5,6 +5,7 @@ from danbooru_client import (
     PROFILE_DANBOORU,
     PROFILE_GELBOORU,
     PROFILE_MOEBOORU,
+    PROFILE_NOZOMI,
     DanbooruClient,
     _normalize_post,
 )
@@ -34,6 +35,7 @@ class ClientProfileTests(unittest.TestCase):
             ("https://yande.re", PROFILE_MOEBOORU),
             ("https://konachan.com", PROFILE_MOEBOORU),
             ("https://gelbooru.com", PROFILE_GELBOORU),
+            ("https://nozomi.la", PROFILE_NOZOMI),
         ]
 
         for base_url, expected_profile in cases:
@@ -86,6 +88,39 @@ class PostNormalizationTests(unittest.TestCase):
         self.assertEqual(post["rating"], "e")
         self.assertEqual(post["score"], 7)
         self.assertEqual(post["tag_string_artist"], "")
+
+    def test_normalizes_protocol_relative_gelbooru_url(self):
+        post = _normalize_post(
+            {
+                "id": 789,
+                "tags": "1girl",
+                "file_url": "//img3.gelbooru.com/images/ab/cd/file.jpg",
+            },
+            profile=PROFILE_GELBOORU,
+            base_url="https://gelbooru.com",
+        )
+
+        self.assertEqual(
+            post["file_url"],
+            "https://img3.gelbooru.com/images/ab/cd/file.jpg",
+        )
+
+    def test_builds_gelbooru_url_from_directory_and_image(self):
+        post = _normalize_post(
+            {
+                "id": 999,
+                "tags": "1girl",
+                "directory": "ab/cd",
+                "image": "file.jpg",
+            },
+            profile=PROFILE_GELBOORU,
+            base_url="https://gelbooru.com",
+        )
+
+        self.assertEqual(
+            post["file_url"],
+            "https://img3.gelbooru.com/images/ab/cd/file.jpg",
+        )
 
 
 if __name__ == "__main__":

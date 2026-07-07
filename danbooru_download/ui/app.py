@@ -18,6 +18,14 @@ import customtkinter as ctk
 from tkinter import PhotoImage, colorchooser, filedialog, messagebox, font as tkfont
 
 from danbooru_download.core.config import Config, QueueTaskConfig
+from danbooru_download.core.credentials import (
+    CredentialsStore,
+    default_credentials_path,
+    get_auth_profile,
+    parse_credential_blob,
+    preset_for_url,
+    validate_credentials,
+)
 from danbooru_download.core.danbooru_client import DanbooruClient
 from danbooru_download.core.image_conversion import (
     normalize_background_color,
@@ -40,10 +48,11 @@ def app_dir() -> Path:
 APP_DIR = app_dir()
 DEFAULT_DOWNLOAD_DIR = APP_DIR / "Download"
 DEFAULT_CONFIG_PATH = APP_DIR / "default_config.yaml"
+DEFAULT_CREDENTIALS_PATH = default_credentials_path(APP_DIR)
 DEFAULT_FILENAME_FORMAT = "{artist}_{id}.{ext}"
 VIDEO_EXTENSIONS = {"mp4", "webm", "zip"}
 LOG_DIVIDER = "=" * 50
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 GITHUB_URL = "https://github.com/storyAura/DanbooruDownload"
 DEFAULT_SITE_URL = "https://danbooru.donmai.us"
 SITE_PRESETS = {
@@ -53,6 +62,7 @@ SITE_PRESETS = {
     "Safebooru": "https://safebooru.donmai.us",
     "Yande.re": "https://yande.re",
     "Konachan": "https://konachan.com",
+    "Nozomi.la": "https://nozomi.la",
 }
 CUSTOM_SITE_LABEL = "Custom"
 
@@ -114,7 +124,7 @@ FONT_SIZES = {
     "button": 13,
 }
 
-COLORS = {
+THEME_LIGHT = {
     "app_bg": "#F4F7F8",
     "panel": "#FFFFFF",
     "panel_alt": "#F8FBFB",
@@ -142,6 +152,90 @@ COLORS = {
     "done_bg": "#F0FAF4",
     "failed_bg": "#FFF1F1",
 }
+
+THEME_DARK = {
+    "app_bg": "#12181A",
+    "panel": "#1B2326",
+    "panel_alt": "#232C30",
+    "panel_hover": "#2A3438",
+    "border": "#2E3A3E",
+    "border_strong": "#3A484D",
+    "accent": "#24B5B5",
+    "accent_hover": "#1C9898",
+    "accent_soft": "#163436",
+    "success": "#3CB371",
+    "success_dark": "#2E9159",
+    "success_soft": "#1A2E24",
+    "warning": "#D4A017",
+    "warning_soft": "#3A3018",
+    "danger": "#E05A5A",
+    "danger_hover": "#C44A4A",
+    "danger_soft": "#3A2020",
+    "text_primary": "#E8F0F2",
+    "text_secondary": "#9AADB2",
+    "text_muted": "#738388",
+    "queue_item_bg": "#232C30",
+    "queue_item_hover": "#2A3438",
+    "queue_item_border": "#2E3A3E",
+    "running_glow": "#24B5B5",
+    "done_bg": "#1A2E24",
+    "failed_bg": "#3A2020",
+}
+
+COLORS: dict[str, str] = {}
+
+
+def normalize_ui_theme(value) -> str:
+    mode = str(value or "light").strip().lower()
+    return mode if mode in {"light", "dark"} else "light"
+
+
+def apply_theme_palette(mode: str) -> str:
+    """Switch the active COLORS palette and return the normalized mode."""
+    normalized = normalize_ui_theme(mode)
+    palette = THEME_DARK if normalized == "dark" else THEME_LIGHT
+    COLORS.clear()
+    COLORS.update(palette)
+    return normalized
+
+
+apply_theme_palette("light")
+
+
+def theme_entry_kwargs() -> dict:
+    return {
+        "height": 34,
+        "corner_radius": 8,
+        "border_color": COLORS["border"],
+        "fg_color": COLORS["panel_alt"],
+        "font": ui_font("body"),
+        "text_color": COLORS["text_primary"],
+    }
+
+
+def theme_checkbox_kwargs() -> dict:
+    return {
+        "text_color": COLORS["text_primary"],
+        "fg_color": COLORS["accent"],
+        "hover_color": COLORS["accent_hover"],
+        "border_color": COLORS["border_strong"],
+    }
+
+
+def configure_secondary_button(button: ctk.CTkButton) -> None:
+    button.configure(**button_style("secondary"))
+
+
+def configure_primary_button(button: ctk.CTkButton) -> None:
+    button.configure(**button_style("primary"))
+
+
+def configure_success_button(button: ctk.CTkButton) -> None:
+    button.configure(**button_style("success"))
+
+
+def configure_danger_button(button: ctk.CTkButton) -> None:
+    button.configure(**button_style("danger"))
 
 
 def resolve_ui_font() -> str:
@@ -225,6 +319,10 @@ class CardFrame(ctk.CTkFrame):
 
     def set_title(self, title: str, icon: str = ""):
         self._title_label.configure(text=f"{icon}  {title}" if icon else title)
+
+    def apply_theme(self):
+        self.configure(fg_color=COLORS["panel"], border_color=COLORS["border"])
+        self._title_label.configure(text_color=COLORS["text_primary"])
 
 
 @dataclass
@@ -454,6 +552,9 @@ class SettingsDialog(ctk.CTkToplevel):
         config: Config,
         on_conversion_change,
         on_save_default,
+        credentials_store: CredentialsStore,
+        current_preset: str,
+        on_save_credentials,
     ):
         super().__init__(parent)
         self._lang = lang
@@ -462,13 +563,16 @@ class SettingsDialog(ctk.CTkToplevel):
         self._on_conversion_change = on_conversion_change
         self._on_save_default = on_save_default
         self._config = config
+        self._credentials_store = credentials_store
+        self._on_save_credentials = on_save_credentials
+        self._auth_preset = current_preset if current_preset in SITE_PRESETS else "Danbooru"
         self.t = I18N[lang]
         self._last_conversion_is_webp = None
         self._background_color_preview = normalize_background_color(
             config.auto_convert_background_color
         )
         self.title(self.t["settings_title"])
-        self.geometry("560x780")
+        self.geometry("560x980")
         self.resizable(False, False)
         self.configure(fg_color=COLORS["app_bg"])
         self.transient(parent)
@@ -477,6 +581,91 @@ class SettingsDialog(ctk.CTkToplevel):
         self.after(30, self._fade_in, 0.0)
 
     def _build_content(self):
+        card_api = CardFrame(self, self.t["api_settings"])
+        card_api.pack(fill="x", padx=16, pady=(16, 8))
+        c = card_api.content
+
+        row_preset = ctk.CTkFrame(c, fg_color="transparent")
+        row_preset.pack(fill="x", pady=(0, 8))
+        ctk.CTkLabel(
+            row_preset, text=self.t["site_preset"], width=90, anchor="w",
+            font=ui_font("body"), text_color=COLORS["text_secondary"],
+        ).pack(side="left")
+        self.auth_preset_var = ctk.StringVar(value=self._auth_preset)
+        ctk.CTkOptionMenu(
+            row_preset,
+            values=list(SITE_PRESETS.keys()),
+            variable=self.auth_preset_var,
+            command=self._on_auth_preset_change,
+            font=ui_font("body"),
+            fg_color=COLORS["panel_alt"],
+            button_color=COLORS["accent"],
+            button_hover_color=COLORS["accent_hover"],
+            dropdown_fg_color=COLORS["panel"],
+            dropdown_hover_color=COLORS["panel_alt"],
+            width=180,
+        ).pack(side="left", padx=(8, 0))
+
+        self.lbl_auth_desc = ctk.CTkLabel(
+            c,
+            text="",
+            font=ui_font("caption"),
+            text_color=COLORS["text_muted"],
+            wraplength=500,
+            justify="left",
+        )
+        self.lbl_auth_desc.pack(anchor="w", pady=(0, 8))
+
+        self.var_auth_quick_paste = ctk.CTkEntry(
+            c,
+            placeholder_text=self.t["auth_quick_paste_hint"],
+            **theme_entry_kwargs(),
+        )
+        self._lbl_auth_quick_paste = self._auth_form_row(
+            c, self.t["auth_quick_paste"], self.var_auth_quick_paste
+        )
+        self.var_auth_quick_paste.bind("<FocusOut>", self._on_auth_blob_focus_out)
+        self.var_auth_quick_paste.bind("<Control-v>", self._on_auth_blob_paste, add="+")
+        self.var_auth_quick_paste.bind("<KeyRelease>", self._on_auth_blob_key_release)
+
+        self.var_auth_username = ctk.CTkEntry(
+            c, **theme_entry_kwargs(),
+        )
+        self._lbl_auth_user = self._auth_form_row(c, self.t["auth_username"], self.var_auth_username)
+        self.var_auth_username.bind("<FocusOut>", self._on_auth_blob_focus_out)
+        self.var_auth_apikey = ctk.CTkEntry(
+            c, show=MASK_CHAR, **theme_entry_kwargs(),
+        )
+        self._lbl_auth_apikey = self._auth_form_row(c, self.t["api_key"], self.var_auth_apikey)
+        self.var_auth_apikey.bind("<FocusOut>", self._on_auth_blob_focus_out)
+
+        self.lbl_auth_help = ctk.CTkLabel(
+            c,
+            text="",
+            font=ui_font("caption"),
+            text_color=COLORS["text_secondary"],
+            wraplength=500,
+            justify="left",
+        )
+        self.lbl_auth_help.pack(anchor="w", pady=(0, 8))
+
+        row_auth_btns = ctk.CTkFrame(c, fg_color="transparent")
+        row_auth_btns.pack(fill="x", pady=(0, 4))
+        ctk.CTkButton(
+            row_auth_btns,
+            text=self.t["auth_open_account"],
+            command=self._open_auth_help_url,
+            **button_style("secondary"),
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            row_auth_btns,
+            text=self.t["auth_save"],
+            command=self._save_auth_credentials,
+            **button_style("primary"),
+        ).pack(side="left")
+
+        self._load_auth_fields_for_preset(self._auth_preset)
+
         card_appear = CardFrame(self, self.t["appearance"])
         card_appear.pack(fill="x", padx=16, pady=(16, 8))
         c = card_appear.content
@@ -529,6 +718,20 @@ class SettingsDialog(ctk.CTkToplevel):
         if self._config.auto_convert_images:
             self.var_auto_convert.select()
         self.var_auto_convert.pack(anchor="w", pady=(4, 8))
+
+        self.var_keep_original = ctk.CTkCheckBox(
+            card_misc.content,
+            text=self.t["auto_convert_keep_original"],
+            font=ui_font("body"),
+            text_color=COLORS["text_primary"],
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
+            border_color=COLORS["border_strong"],
+            command=self._sync_conversion,
+        )
+        if self._config.auto_convert_keep_original:
+            self.var_keep_original.select()
+        self.var_keep_original.pack(anchor="w", pady=(0, 8))
 
         row_convert = ctk.CTkFrame(card_misc.content, fg_color="transparent")
         row_convert.pack(fill="x", pady=(0, 8))
@@ -699,6 +902,128 @@ class SettingsDialog(ctk.CTkToplevel):
             command=self._fade_out_and_close, **button_style("primary"),
         ).pack(pady=(8, 16))
 
+    def _auth_form_row(self, parent, label_text, entry):
+        label = ctk.CTkLabel(
+            parent, text=label_text, anchor="w",
+            font=ui_font("body"), text_color=COLORS["text_secondary"],
+        )
+        label.pack(fill="x", anchor="w", pady=(0, 5))
+        entry.pack(fill="x", pady=(0, 8))
+        return label
+
+    def _auth_base_url(self, preset: str) -> str:
+        return SITE_PRESETS.get(preset, DEFAULT_SITE_URL)
+
+    def _load_auth_fields_for_preset(self, preset: str):
+        base_url = self._auth_base_url(preset)
+        auth = get_auth_profile(base_url)
+        cred = self._credentials_store.get_for_preset(preset)
+
+        if auth.username_label == "user_id":
+            self._lbl_auth_user.configure(text=self.t["auth_user_id"])
+        else:
+            self._lbl_auth_user.configure(text=self.t["auth_username"])
+
+        if auth.auth_required:
+            self.lbl_auth_desc.configure(text=self.t["auth_required_hint"])
+        else:
+            self.lbl_auth_desc.configure(text=self.t["auth_optional_hint"])
+
+        if auth.profile == "gelbooru":
+            self.lbl_auth_help.configure(text=self.t["auth_help_gelbooru"])
+        elif auth.profile == "moebooru":
+            self.lbl_auth_help.configure(text=self.t["auth_help_moebooru"])
+        else:
+            self.lbl_auth_help.configure(text=self.t["auth_help_danbooru"])
+
+        self._auth_help_url = auth.help_url
+        self.var_auth_username.delete(0, "end")
+        self.var_auth_apikey.delete(0, "end")
+        if cred.username:
+            self.var_auth_username.insert(0, cred.username)
+        if cred.api_key:
+            self.var_auth_apikey.insert(0, cred.api_key)
+
+    def _on_auth_preset_change(self, preset: str):
+        self._auth_preset = preset
+        self._load_auth_fields_for_preset(preset)
+
+    def _open_auth_help_url(self):
+        if getattr(self, "_auth_help_url", ""):
+            webbrowser.open(self._auth_help_url)
+
+    def _fill_parsed_credentials(self, username: str, api_key: str) -> None:
+        self.var_auth_username.delete(0, "end")
+        self.var_auth_username.insert(0, username)
+        self.var_auth_apikey.delete(0, "end")
+        self.var_auth_apikey.insert(0, api_key)
+        if hasattr(self, "var_auth_quick_paste"):
+            self.var_auth_quick_paste.delete(0, "end")
+
+    def _try_parse_auth_blob(self, text: str) -> bool:
+        username, api_key = parse_credential_blob(text)
+        if not username or not api_key:
+            return False
+        self._fill_parsed_credentials(username, api_key)
+        return True
+
+    def _on_auth_blob_focus_out(self, event=None):
+        widget = getattr(event, "widget", None)
+        if widget is self.var_auth_quick_paste:
+            text = self.var_auth_quick_paste.get()
+        elif widget in {self.var_auth_username, self.var_auth_apikey}:
+            text = widget.get()
+        else:
+            text = self.var_auth_quick_paste.get()
+        if self._try_parse_auth_blob(text):
+            messagebox.showinfo(self.t["hint"], self.t["auth_parsed_success"], parent=self)
+
+    def _on_auth_blob_paste(self, _event=None):
+        self.after(10, self._on_auth_blob_focus_out)
+
+    def _on_auth_blob_key_release(self, _event=None):
+        text = self.var_auth_quick_paste.get()
+        if "api_key=" in text.lower() and ("user_id=" in text.lower() or "username=" in text.lower()):
+            if self._try_parse_auth_blob(text):
+                messagebox.showinfo(self.t["hint"], self.t["auth_parsed_success"], parent=self)
+
+    def _resolve_auth_fields(self) -> tuple[str | None, str | None]:
+        username = self.var_auth_username.get().strip() or None
+        api_key = self.var_auth_apikey.get().strip() or None
+        for blob in (
+            self.var_auth_quick_paste.get().strip(),
+            username or "",
+            api_key or "",
+            " ".join(filter(None, [username, api_key])),
+        ):
+            parsed_user, parsed_key = parse_credential_blob(blob)
+            if parsed_user and parsed_key:
+                self._fill_parsed_credentials(parsed_user, parsed_key)
+                return parsed_user, parsed_key
+        return username, api_key
+
+    def _save_auth_credentials(self):
+        preset = self.auth_preset_var.get()
+        base_url = self._auth_base_url(preset)
+        username, api_key = self._resolve_auth_fields()
+        errors = validate_credentials(base_url, username, api_key)
+        if errors:
+            if "auth_required" in errors:
+                messagebox.showwarning(self.t["hint"], self.t["auth_required_hint"], parent=self)
+                return
+            if "auth_validation_user_id" in errors:
+                messagebox.showwarning(
+                    self.t["hint"], self.t["auth_validation_user_id"], parent=self
+                )
+                return
+        self._credentials_store.set_for_preset(preset, username, api_key)
+        self._on_save_credentials(preset)
+        messagebox.showinfo(
+            self.t["hint"],
+            self.t["auth_save_success"].format(path=DEFAULT_CREDENTIALS_PATH),
+            parent=self,
+        )
+
     def _fade_in(self, alpha: float):
         if not self.winfo_exists():
             return
@@ -775,6 +1100,8 @@ class SettingsDialog(ctk.CTkToplevel):
             self.btn_bg_color.configure(state=state)
             self._last_conversion_is_webp = is_webp
         self._sync_background_color_preview()
+        keep_original_state = "normal" if self.var_auto_convert.get() else "disabled"
+        self.var_keep_original.configure(state=keep_original_state)
         self.lbl_convert_quality.configure(
             text=f"{self.t['auto_convert_quality']}: {self.var_convert_quality.get()}"
         )
@@ -789,6 +1116,7 @@ class SettingsDialog(ctk.CTkToplevel):
             int(self.var_convert_effort.get()),
             background_mode,
             self.entry_bg_color.get().strip(),
+            bool(self.var_keep_original.get()),
         )
 
     def _save_default(self):
@@ -902,6 +1230,11 @@ class DanbooruGUI(ctk.CTk):
         self._auto_convert_effort = 6
         self._auto_convert_background_mode = "color"
         self._auto_convert_background_color = "#ff4fd8"
+        self._auto_convert_keep_original = True
+        self._ui_theme = "light"
+        apply_theme_palette(self._ui_theme)
+        self._credentials_store = CredentialsStore(DEFAULT_CREDENTIALS_PATH)
+        self._credentials_store.load()
         self.site_preset_popup = None
         self.site_preset_popup_frame = None
         self.rating_popup = None
@@ -1091,6 +1424,7 @@ class DanbooruGUI(ctk.CTk):
         t = self.t
         top = ctk.CTkFrame(self, fg_color=COLORS["app_bg"])
         top.pack(fill="x", padx=24, pady=(18, 10))
+        self._top_bar = top
         self._lbl_title = ctk.CTkLabel(
             top, text=t["title"],
             font=ui_font("title", "bold"),
@@ -1118,6 +1452,7 @@ class DanbooruGUI(ctk.CTk):
 
         main = ctk.CTkFrame(self, fg_color=COLORS["app_bg"])
         main.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self._main_frame = main
         main.grid_columnconfigure(0, minsize=500, weight=0)
         main.grid_columnconfigure(1, weight=1)
         main.grid_columnconfigure(2, minsize=340, weight=0)
@@ -1186,18 +1521,6 @@ class DanbooruGUI(ctk.CTk):
         self.var_url.insert(0, DEFAULT_SITE_URL)
         self._set_site_preset_label("Danbooru")
         self.var_url.bind("<KeyRelease>", self._on_site_url_edit)
-        self.var_username = ctk.CTkEntry(
-            c, placeholder_text=t["optional"], height=34, corner_radius=8,
-            border_color=COLORS["border"], fg_color=COLORS["panel_alt"],
-            font=ui_font("body"), text_color=COLORS["text_primary"],
-        )
-        self._lbl_user = form_row(c, t["username"], self.var_username)
-        self.var_apikey = ctk.CTkEntry(
-            c, placeholder_text=t["optional"], show=MASK_CHAR, height=34,
-            corner_radius=8, border_color=COLORS["border"], fg_color=COLORS["panel_alt"],
-            font=ui_font("body"), text_color=COLORS["text_primary"],
-        )
-        self._lbl_apikey = form_row(c, t["api_key"], self.var_apikey)
 
         self.card_search = CardFrame(left, t["search_settings"])
         self.card_search.pack(fill="x", pady=(0, 12))
@@ -1709,6 +2032,8 @@ class DanbooruGUI(ctk.CTk):
             auto_convert_effort=config.auto_convert_effort,
             auto_convert_background_mode=config.auto_convert_background_mode,
             auto_convert_background_color=config.auto_convert_background_color,
+            auto_convert_keep_original=config.auto_convert_keep_original,
+            referer_base=config.base_url,
         )
         dl.download_batch(posts)
 
@@ -1721,6 +2046,15 @@ class DanbooruGUI(ctk.CTk):
             return "cancelled"
         return "success"
 
+    def _current_site_preset(self) -> str:
+        preset = self.var_site_preset.get()
+        if preset in SITE_PRESETS:
+            return preset
+        return preset_for_url(self._get_entry_text(self.var_url) or DEFAULT_SITE_URL)
+
+    def _apply_credentials(self, config: Config) -> Config:
+        return self._credentials_store.apply_to_config(config)
+
     def _open_settings(self):
         SettingsDialog(
             self,
@@ -1730,10 +2064,136 @@ class DanbooruGUI(ctk.CTk):
             self._build_config(),
             self._on_conversion_settings_change,
             self._save_default_config,
+            self._credentials_store,
+            self._current_site_preset(),
+            self._on_save_credentials,
         )
 
+    def _on_save_credentials(self, preset: str):
+        self._credentials_store.save()
+        self._log_message(self.t["auth_save_success"].format(path=DEFAULT_CREDENTIALS_PATH))
+
     def _on_theme_change(self, mode: str):
+        self._ui_theme = apply_theme_palette(mode)
         ctk.set_appearance_mode(mode)
+        self._apply_theme()
+
+    def _apply_theme(self):
+        self.configure(fg_color=COLORS["app_bg"])
+        if hasattr(self, "_top_bar"):
+            self._top_bar.configure(fg_color=COLORS["app_bg"])
+        if hasattr(self, "_main_frame"):
+            self._main_frame.configure(fg_color=COLORS["app_bg"])
+        if hasattr(self, "_scroll"):
+            self._scroll.configure(
+                scrollbar_button_color=COLORS["border_strong"],
+                scrollbar_button_hover_color=COLORS["accent"],
+            )
+
+        if hasattr(self, "_lbl_title"):
+            self._lbl_title.configure(text_color=COLORS["text_primary"])
+        if hasattr(self, "_lbl_log_title"):
+            self._lbl_log_title.configure(text_color=COLORS["text_primary"])
+
+        for card_name in (
+            "card_site", "card_search", "card_dl", "card_queue",
+            "card_actions", "card_prog", "card_log",
+        ):
+            card = getattr(self, card_name, None)
+            if card is not None:
+                card.apply_theme()
+
+        label_names = (
+            "_lbl_site_preset", "_lbl_url", "_lbl_tags", "_lbl_blocked",
+            "_lbl_rating", "_lbl_minscore", "_lbl_folder", "_lbl_fmt",
+            "_lbl_max", "_lbl_conc", "_lbl_timeout", "_lbl_queue_empty", "lbl_stats",
+        )
+        for name in label_names:
+            widget = getattr(self, name, None)
+            if widget is not None:
+                color = COLORS["text_secondary"]
+                if name in {"lbl_stats", "_lbl_queue_empty"}:
+                    color = COLORS["text_secondary"]
+                widget.configure(text_color=color)
+
+        for name in ("lbl_path_preview", "lbl_fmt_hint", "lbl_txt_hint"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.configure(text_color=COLORS["text_muted"])
+
+        if hasattr(self, "lbl_speed"):
+            self.lbl_speed.configure(text_color=COLORS["accent"])
+
+        entry_names = (
+            "var_url", "var_tags", "var_blocked", "var_min_score", "var_folder_name",
+            "entry_filename", "var_max_posts", "var_concurrent", "var_timeout",
+        )
+        for name in entry_names:
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.configure(**theme_entry_kwargs())
+
+        checkbox_names = (
+            "var_custom_name", "var_skip_existing", "var_download_video", "var_save_tag_txt",
+            "var_tag_txt_underscore_to_space", "var_tag_txt_escape_special_chars",
+        )
+        for name in checkbox_names:
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.configure(**theme_checkbox_kwargs())
+        if hasattr(self, "_tag_txt_vars"):
+            for widget in self._tag_txt_vars.values():
+                widget.configure(**theme_checkbox_kwargs())
+
+        for button, kind in (
+            (getattr(self, "btn_settings", None), "primary"),
+            (getattr(self, "btn_import", None), "secondary"),
+            (getattr(self, "btn_export", None), "secondary"),
+            (getattr(self, "btn_site_preset", None), "secondary"),
+            (getattr(self, "btn_rating", None), "secondary"),
+            (getattr(self, "btn_placeholder", None), "secondary"),
+            (getattr(self, "btn_queue_add", None), "primary"),
+            (getattr(self, "btn_queue_clear", None), "secondary"),
+            (getattr(self, "btn_start", None), "primary"),
+            (getattr(self, "btn_queue_start", None), "success"),
+            (getattr(self, "btn_stop", None), "danger"),
+            (getattr(self, "btn_clear", None), "secondary"),
+        ):
+            if button is None:
+                continue
+            if kind == "primary":
+                configure_primary_button(button)
+            elif kind == "success":
+                configure_success_button(button)
+            elif kind == "danger":
+                configure_danger_button(button)
+            else:
+                configure_secondary_button(button)
+
+        if hasattr(self, "_queue_list_frame"):
+            self._queue_list_frame.configure(
+                fg_color=COLORS["panel_alt"],
+                border_color=COLORS["border"],
+                scrollbar_button_color=COLORS["border_strong"],
+                scrollbar_button_hover_color=COLORS["accent"],
+            )
+
+        if hasattr(self, "progress"):
+            self.progress.configure(progress_color=COLORS["accent"])
+
+        if hasattr(self, "txt_log"):
+            self.txt_log.configure(
+                fg_color=COLORS["panel_alt"],
+                border_color=COLORS["border"],
+                text_color=COLORS["text_primary"],
+            )
+
+        if self.site_preset_popup:
+            self.site_preset_popup.destroy()
+            self.site_preset_popup = None
+            self.site_preset_popup_frame = None
+        self._reset_rating_menu()
+        self._rebuild_queue_list()
 
     def _on_lang_change(self, lang: str):
         if lang == self._lang:
@@ -1753,6 +2213,7 @@ class DanbooruGUI(ctk.CTk):
         effort: int,
         background_mode: str,
         background_color: str,
+        keep_original: bool = True,
     ):
         self._auto_convert_images = enabled
         self._auto_convert_format = fmt if fmt in {"jpg", "webp"} else "jpg"
@@ -1761,6 +2222,7 @@ class DanbooruGUI(ctk.CTk):
         self._auto_convert_effort = effort if 0 <= effort <= 6 else 6
         self._auto_convert_background_mode = normalize_background_mode(background_mode)
         self._auto_convert_background_color = normalize_background_color(background_color)
+        self._auto_convert_keep_original = keep_original
 
     def _update_texts(self, old_rating_val: str = ""):
         t = self.t
@@ -1772,8 +2234,6 @@ class DanbooruGUI(ctk.CTk):
         self.card_site.set_title(t["site_settings"])
         self._lbl_site_preset.configure(text=t["site_preset"])
         self._lbl_url.configure(text=t["site_url"])
-        self._lbl_user.configure(text=t["username"])
-        self._lbl_apikey.configure(text=t["api_key"])
         self.card_search.set_title(t["search_settings"])
         self._lbl_tags.configure(text=t["search_tags"])
         self.var_tags.configure(placeholder_text=t["search_tags_hint"])
@@ -1876,10 +2336,10 @@ class DanbooruGUI(ctk.CTk):
             fmt = self._get_entry_text(self.entry_filename) or DEFAULT_FILENAME_FORMAT
         else:
             fmt = DEFAULT_FILENAME_FORMAT
-        return Config(
+        return self._apply_credentials(Config(
             base_url=self._get_entry_text(self.var_url) or DEFAULT_SITE_URL,
-            username=self._get_entry_text(self.var_username) or None,
-            api_key=self._get_entry_text(self.var_apikey) or None,
+            username=None,
+            api_key=None,
             tags=self._get_entry_text(self.var_tags),
             blocked_tags=self._get_entry_text(self.var_blocked),
             rating=rating_val or None, min_score=min_score,
@@ -1901,6 +2361,8 @@ class DanbooruGUI(ctk.CTk):
             auto_convert_effort=self._auto_convert_effort,
             auto_convert_background_mode=self._auto_convert_background_mode,
             auto_convert_background_color=self._auto_convert_background_color,
+            auto_convert_keep_original=self._auto_convert_keep_original,
+            ui_theme=self._ui_theme,
             queue_tasks=[
                 QueueTaskConfig(
                     tags=item.tags,
@@ -1909,7 +2371,15 @@ class DanbooruGUI(ctk.CTk):
                 )
                 for item in self._queue_items
             ],
-        )
+        ))
+
+    def _task_config_dict(self, config: Config) -> dict:
+        from dataclasses import asdict
+
+        data = asdict(config)
+        data.pop("username", None)
+        data.pop("api_key", None)
+        return data
 
     def _apply_config(self, config: Config):
         def _set(entry, val):
@@ -1919,8 +2389,6 @@ class DanbooruGUI(ctk.CTk):
                 entry.insert(0, val)
         _set(self.var_url, config.base_url)
         self._set_site_preset_label(self._site_label_for_url(config.base_url))
-        _set(self.var_username, config.username or "")
-        _set(self.var_apikey, config.api_key or "")
         _set(self.var_tags, config.tags)
         _set(self.var_blocked, config.blocked_tags)
         self._set_rating_label(self._rating_rev.get(config.rating or "", self.t["rating_options"][0]))
@@ -1969,6 +2437,12 @@ class DanbooruGUI(ctk.CTk):
         self._auto_convert_background_color = normalize_background_color(
             config.auto_convert_background_color
         )
+        self._auto_convert_keep_original = bool(
+            getattr(config, "auto_convert_keep_original", True)
+        )
+        self._ui_theme = normalize_ui_theme(getattr(config, "ui_theme", "light"))
+        apply_theme_palette(self._ui_theme)
+        ctk.set_appearance_mode(self._ui_theme)
         self._sync_tag_txt_controls()
         is_custom = config.filename_format != DEFAULT_FILENAME_FORMAT
         if is_custom:
@@ -1987,23 +2461,37 @@ class DanbooruGUI(ctk.CTk):
             for task in config.queue_tasks
         ]
         self._current_queue_index = -1
-        self._rebuild_queue_list()
+        self._apply_theme()
 
     def _load_default_config(self):
+        self._credentials_store.load()
         if not DEFAULT_CONFIG_PATH.exists():
             return
         try:
             config = Config.from_yaml(DEFAULT_CONFIG_PATH)
+            migrated = False
+            if config.username or config.api_key:
+                preset = preset_for_url(config.base_url)
+                if self._credentials_store.migrate_from_config(config, preset):
+                    migrated = True
+                    self._credentials_store.save()
             self._apply_config(config)
+            if migrated:
+                self._save_default_config(silent=True)
             self._log_message(self.t["default_config_loaded"].format(path=DEFAULT_CONFIG_PATH))
         except Exception as e:
             self._log_message(self.t["default_config_fail"].format(error=e))
 
-    def _save_default_config(self):
+    def _save_default_config(self, silent: bool = False):
         try:
+            import yaml
+
             config = self._build_config()
-            config.to_yaml(DEFAULT_CONFIG_PATH)
-            self._log_message(self.t["default_config_saved"].format(path=DEFAULT_CONFIG_PATH))
+            data = self._task_config_dict(config)
+            with open(DEFAULT_CONFIG_PATH, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            if not silent:
+                self._log_message(self.t["default_config_saved"].format(path=DEFAULT_CONFIG_PATH))
         except Exception as e:
             messagebox.showerror(self.t["export_fail"], self.t["export_fail_msg"].format(e))
 
@@ -2017,6 +2505,10 @@ class DanbooruGUI(ctk.CTk):
             return
         try:
             config = Config.from_yaml(path)
+            preset = preset_for_url(config.base_url)
+            if config.username or config.api_key:
+                if self._credentials_store.migrate_from_config(config, preset):
+                    self._credentials_store.save()
             self._apply_config(config)
             self._log_message(f"Imported config: {path}")
         except Exception as e:
@@ -2031,8 +2523,12 @@ class DanbooruGUI(ctk.CTk):
         if not path:
             return
         try:
+            import yaml
+
             config = self._build_config()
-            config.to_yaml(path)
+            data = self._task_config_dict(config)
+            with open(path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
             self._log_message(f"Config saved: {path}")
         except Exception as e:
             messagebox.showerror(t["export_fail"], t["export_fail_msg"].format(e))
@@ -2182,6 +2678,8 @@ class DanbooruGUI(ctk.CTk):
                     auto_convert_effort=config.auto_convert_effort,
                     auto_convert_background_mode=config.auto_convert_background_mode,
                     auto_convert_background_color=config.auto_convert_background_color,
+                    auto_convert_keep_original=config.auto_convert_keep_original,
+                    referer_base=config.base_url,
                 )
                 stats = dl.download_batch(posts)
                 self._log_message("")
@@ -2229,6 +2727,7 @@ def main():
         pass
 
     ctk.set_appearance_mode("light")
+    apply_theme_palette("light")
     ctk.set_default_color_theme("blue")
 
     app = DanbooruGUI()

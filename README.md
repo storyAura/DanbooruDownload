@@ -4,15 +4,15 @@
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
-Current version: `v1.2`
+Current version: `v1.3.0`
 
-v1.2 focuses on WebP transparency backgrounds, clearer converted-output folders, a color picker in settings, a refreshed logo, and repeatable Windows EXE packaging. See [UPDATE.md](UPDATE.md) for the full changelog.
+v1.3 adds Nozomi.la support, global API credentials, dark theme, optional original-file removal after conversion, and download validation fixes. See [UPDATE.md](UPDATE.md) for the full changelog.
 
 ## 版本更新
 
-当前版本：`v1.2`
+当前版本：`v1.3.0`
 
-本次版本重点更新了 WebP 透明背景处理、转换输出目录命名、设置页颜色选择器、Logo 与 Windows EXE 打包流程。完整更新记录见 [UPDATE.md](UPDATE.md)。
+本次版本重点新增 Nozomi.la 站点、全局 API 凭据、暗色主题、转换后可删除原图，以及下载 URL/文件校验修复。完整更新记录见 [UPDATE.md](UPDATE.md)。
 
 ## 中文说明
 
@@ -21,13 +21,15 @@ v1.2 focuses on WebP transparency backgrounds, clearer converted-output folders,
 | 功能 | 说明 |
 | --- | --- |
 | GUI 和 CLI | 双击 `start.bat` 使用图形界面，也可以用 `python main.py` 批量下载。 |
-| 站点预设 | 内置 Danbooru、AIBooru、Gelbooru、Safebooru、Yande.re、Konachan，也支持自定义站点地址。 |
+| 站点预设 | 内置 Danbooru、AIBooru、Gelbooru、Safebooru、Yande.re、Konachan、Nozomi.la，也支持自定义站点地址。 |
 | 下载队列 | 可以把多个标签搜索加入队列，按顺序下载、查看单项进度，并对失败任务重爬。 |
 | 并发下载 | 异步下载引擎，支持自定义并发数和请求超时。 |
 | 智能跳过 | 已存在文件会进行 MD5 校验，避免重复下载。 |
 | 同名 TXT 标签 | 可为每张图片生成同名 `.txt` 标签文件，适合数据集和 LoRA 工作流。 |
-| 自动格式转换 | 下载后可自动转换为 JPG 或 WebP，支持质量、WebP 无损和压缩程度配置。 |
+| 自动格式转换 | 下载后可自动转换为 JPG 或 WebP，支持质量、WebP 无损和压缩程度配置；可选转换后删除原图。 |
+| 暗色主题 | 设置页可切换浅色/深色界面，主题偏好保存在 `default_config.yaml`。 |
 | 默认配置 | 设置窗口可保存当前设置为 `default_config.yaml`，下次启动自动加载。 |
+| 全局 API 配置 | 设置 → API 认证中按站点预设保存凭据到 `api_credentials.yaml`；Gelbooru 需填写数字 User ID + API Key。 |
 | YAML 配置 | 支持导入、导出下载设置、队列任务、TXT 标签选项和图片转换选项。 |
 | 视频控制 | 可选择下载或跳过 `mp4`、`webm`、`zip` 动图/视频文件。 |
 
@@ -44,6 +46,17 @@ pip install -r requirements.txt
 ```
 
 依赖包括 `httpx`、`httpcore[asyncio]`、`typing_extensions`、`tqdm`、`pyyaml`、`customtkinter`、`Pillow`。
+
+### Windows 下载
+
+正式 Windows 安装包请从 [GitHub Releases](https://github.com/storyAura/DanbooruDownload/releases/latest) 下载：
+
+1. 下载 `DanbooruDownload-v1.3.0-win-x64.zip`
+2. 解压到任意目录
+3. 运行 `DanbooruDownload.exe`
+4. 运行依赖位于 `win-x64/` 文件夹，默认下载目录为 `Download/`
+
+开发者仍可使用 `start.bat` 从源码启动，或使用 `build_exe.bat` 自行打包。
 
 ### 快速开始
 
@@ -66,7 +79,7 @@ start.bat
 build_exe.bat
 ```
 
-`build_exe.bat` 会安装打包依赖、运行测试和编译检查，然后输出 `dist\DanbooruDownload\DanbooruDownload.exe`。运行依赖放在 `win-x64` 文件夹，根目录只保留必要的 `Download` 下载文件夹。日常快速测试仍推荐使用 `start.bat`。
+`build_exe.bat` 会安装打包依赖、运行测试和编译检查，然后输出 `dist\DanbooruDownload\DanbooruDownload.exe`。运行依赖放在 `win-x64` 文件夹，根目录只保留必要的 `Download` 下载文件夹。日常用户请优先从 Releases 下载；开发者快速测试推荐使用 `start.bat`。
 
 ### 实机演示
 
@@ -97,9 +110,17 @@ build_exe.bat
 7. 搜索多个标签时用空格分隔，例如 `1girl solo rating:g`。Gelbooru、Konachan、Safebooru 同样使用空格分隔多标签。
 8. 点击 `当前开始下载` 执行单次任务，或把多个任务加入队列后点击 `队列开始下载`。
 
+### API 认证（全局）
+
+1. 打开 **设置 → API 认证**。
+2. 选择站点预设（如 Gelbooru）。
+3. 按页面说明填写凭据并点击 **保存 API 配置**。
+4. Gelbooru 需填写账户 Options 页中的 **数字 User ID** 和 **API Key**，不是登录用户名。
+5. 凭据保存在程序目录下的 `api_credentials.yaml`，与任务配置 `default_config.yaml` 分离。
+
 ### 自动图片转换
 
-开启 `下载后自动转换图片格式` 后，原图仍保存在原下载目录，转换后的文件保存到原下载目录同级的 `原文件夹名_webp` 或 `原文件夹名_jpg` 文件夹：
+开启 `下载后自动转换图片格式` 后，默认仍保留原图；可在设置中取消勾选 **保留原始文件**，转换成功后仅保留 `原文件夹名_webp` 或 `原文件夹名_jpg` 中的文件。保留原图时的目录结构如下：
 
 ```text
 Download/example/image.png
@@ -109,6 +130,7 @@ Download/example_webp/image.webp
 可配置项：
 
 - 格式：`JPG` 或 `WebP`
+- 保留原始文件：默认开启；关闭后转换成功时删除原图
 - 质量：`1..100`
 - WebP 无损：仅 WebP 生效
 - 压缩程度：`0..6`
@@ -155,6 +177,7 @@ auto_convert_lossless: false
 auto_convert_effort: 6
 auto_convert_background_mode: color
 auto_convert_background_color: "#ff4fd8"
+auto_convert_keep_original: true
 ```
 
 然后运行：
@@ -162,6 +185,14 @@ auto_convert_background_color: "#ff4fd8"
 ```bash
 python main.py --config my_config.yaml
 ```
+
+### Nozomi.la
+
+Nozomi.la 使用独立的标签索引 API，不支持 Danbooru 风格的 `rating:`、`score:` 等 metatag；若任务中包含这些条件，程序会在日志中提示已忽略。
+
+- 标签用空格分隔，例如 `1girl solo`
+- 无需 API 认证
+- 在站点预设中选择 **Nozomi.la** 即可
 
 ### CLI 用法
 
@@ -240,15 +271,28 @@ CLI 默认文件名格式：
 | Feature | Description |
 | --- | --- |
 | GUI and CLI | Use the graphical app from `start.bat`, or automate downloads with `python main.py`. |
-| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, Safebooru, Yande.re, and Konachan, plus custom URLs. |
+| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, Safebooru, Yande.re, Konachan, Nozomi.la, plus custom URLs. |
 | Download queue | Add multiple tag searches to the GUI queue, run them in order, retry tasks, and track per-task progress. |
 | Concurrent downloads | Async downloader with configurable concurrency and request timeouts. |
 | Smart skipping | Existing files are checked by MD5 so repeated runs do not waste bandwidth. |
 | TXT tag export | Optionally save a same-name `.txt` file for each image, useful for dataset and LoRA workflows. |
-| Image conversion | Convert downloaded still images to JPG or WebP with quality, lossless WebP, and compression controls. |
+| Image conversion | Convert downloaded still images to JPG or WebP with quality, lossless WebP, and compression controls; optionally remove originals after conversion. |
+| Dark theme | Switch light/dark UI in Settings; theme preference is saved in `default_config.yaml`. |
 | Default config | Save the current GUI settings as `default_config.yaml` and load them automatically on next start. |
+| Global API credentials | Configure per-site credentials in Settings -> API Credentials; saved to `api_credentials.yaml`. Gelbooru requires numeric User ID + API Key. |
 | YAML configs | Import/export settings, queued tasks, TXT tag options, and image conversion options. |
 | Video control | Choose whether to download or skip `mp4`, `webm`, and `zip` animation files. |
+
+### Download (Windows)
+
+Get the official Windows bundle from [GitHub Releases](https://github.com/storyAura/DanbooruDownload/releases/latest):
+
+1. Download `DanbooruDownload-v1.3.0-win-x64.zip`
+2. Extract it to any folder
+3. Run `DanbooruDownload.exe`
+4. Runtime files live in `win-x64/`; the default download folder is `Download/`
+
+Developers can still launch from source with `start.bat`, or rebuild with `build_exe.bat`.
 
 ### Quick Start
 
@@ -269,7 +313,7 @@ To build the Windows EXE:
 build_exe.bat
 ```
 
-`build_exe.bat` installs build dependencies, runs tests and compile checks, then writes `dist\DanbooruDownload\DanbooruDownload.exe`. Runtime files are placed in `win-x64`, and the bundle root keeps only the necessary `Download` folder for downloaded files. For quick development testing, keep using `start.bat`.
+`build_exe.bat` installs build dependencies, runs tests and compile checks, then writes `dist\DanbooruDownload\DanbooruDownload.exe`. Runtime files are placed in `win-x64`, and the bundle root keeps only the necessary `Download` folder for downloaded files. End users should download from Releases; for quick development testing, keep using `start.bat`.
 
 ### Screenshots
 
@@ -316,7 +360,16 @@ auto_convert_lossless: false
 auto_convert_effort: 6
 auto_convert_background_mode: color
 auto_convert_background_color: "#ff4fd8"
+auto_convert_keep_original: true
 ```
+
+### Nozomi.la
+
+Nozomi.la uses its own tag index API and does not support Danbooru-style metatags such as `rating:` or `score:`. Unsupported metatags are ignored and logged.
+
+- Separate tags with spaces, for example `1girl solo`
+- No API credentials required
+- Select **Nozomi.la** from the site preset menu
 
 Queue tasks are currently used by the GUI. The CLI loads common download settings, TXT tag settings, and image conversion settings.
 
@@ -335,6 +388,7 @@ DanbooruDownload/
 |   |-- core/
 |   |   |-- config.py          # YAML config model and loader
 |   |   |-- danbooru_client.py # Booru API client and post normalization
+|   |   |-- nozomi_client.py   # Nozomi.la tag index and post metadata
 |   |   |-- downloader.py      # Async streaming downloader
 |   |   |-- formatter.py       # Filename and TXT tag formatters
 |   |   `-- image_conversion.py # JPG/WebP conversion helpers
@@ -344,6 +398,7 @@ DanbooruDownload/
 |-- docs/screenshots/          # README screenshots
 |-- tests/                     # Unit tests
 |-- start.bat                  # Windows launcher
+|-- api_credentials.yaml       # Global API credentials (created from Settings)
 |-- build_exe.bat              # PyInstaller packaging script
 |-- DanbooruDownload.spec      # PyInstaller onedir build config
 |-- requirements-build.txt     # Packaging-only dependencies
