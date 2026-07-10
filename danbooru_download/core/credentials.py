@@ -26,7 +26,6 @@ SITE_PRESET_URLS = {
     "Gelbooru": "https://gelbooru.com",
     "Safebooru": "https://safebooru.donmai.us",
     "Yande.re": "https://yande.re",
-    "Konachan": "https://konachan.com",
     "Nozomi.la": "https://nozomi.la",
 }
 
@@ -36,7 +35,6 @@ PRESET_PROFILES = {
     "Gelbooru": PROFILE_GELBOORU,
     "Safebooru": PROFILE_DANBOORU,
     "Yande.re": PROFILE_MOEBOORU,
-    "Konachan": PROFILE_MOEBOORU,
     "Nozomi.la": PROFILE_NOZOMI,
 }
 

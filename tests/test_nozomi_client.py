@@ -55,6 +55,14 @@ class NozomiUrlTests(unittest.TestCase):
         self.assertIn("w.gold-usergeneratedcontent.net", url)
         self.assertTrue(url.endswith(".webp"))
 
+    def test_build_media_url_forces_webp_for_jpg_type(self):
+        # Nozomi's CDN only serves static images as .webp even when post
+        # metadata reports type=jpg/png, so the built URL must use .webp.
+        url, ext = build_media_url("abcdef0123456789", "jpg", is_video=False)
+        self.assertEqual(ext, "webp")
+        self.assertIn("w.gold-usergeneratedcontent.net", url)
+        self.assertTrue(url.endswith(".webp"))
+
     def test_build_media_url_for_video(self):
         url, ext = build_media_url("abcdef0123456789", "webm", is_video=True)
         self.assertIn("v.gold-usergeneratedcontent.net", url)

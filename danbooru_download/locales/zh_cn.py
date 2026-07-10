@@ -6,6 +6,7 @@ LOCALE = {
     "site_settings": "站点设置",
     "site_preset": "站点",
     "site_url": "站点地址",
+    "site_hint_gelbooru": "⚠ Gelbooru 已关闭匿名 API，必须在 设置 → API 认证 填写数字 User ID 与 API Key 才能下载。",
     "username": "用户名",
     "api_key": "API密钥",
     "optional": "可选",

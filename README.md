@@ -4,15 +4,15 @@
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
-Current version: `v1.3.0`
+Current version: `v1.3.1`
 
-v1.3 adds Nozomi.la support, global API credentials, dark theme, optional original-file removal after conversion, and download validation fixes. See [UPDATE.md](UPDATE.md) for the full changelog.
+v1.3.1 fixes Nozomi.la media downloads (static images are served only as `.webp`), removes the Cloudflare-blocked Konachan preset, and adds an in-app reminder that Gelbooru now requires API credentials. See [UPDATE.md](UPDATE.md) for the full changelog.
 
 ## 版本更新
 
-当前版本：`v1.3.0`
+当前版本：`v1.3.1`
 
-本次版本重点新增 Nozomi.la 站点、全局 API 凭据、暗色主题、转换后可删除原图，以及下载 URL/文件校验修复。完整更新记录见 [UPDATE.md](UPDATE.md)。
+本次版本修复 Nozomi.la 图片下载（静态图仅提供 `.webp` 格式）、移除被 Cloudflare 拦截的 Konachan 预设，并在界面中提示 Gelbooru 现已需要 API 凭据。完整更新记录见 [UPDATE.md](UPDATE.md)。
 
 ## 中文说明
 
@@ -21,7 +21,7 @@ v1.3 adds Nozomi.la support, global API credentials, dark theme, optional origin
 | 功能 | 说明 |
 | --- | --- |
 | GUI 和 CLI | 双击 `start.bat` 使用图形界面，也可以用 `python main.py` 批量下载。 |
-| 站点预设 | 内置 Danbooru、AIBooru、Gelbooru、Safebooru、Yande.re、Konachan、Nozomi.la，也支持自定义站点地址。 |
+| 站点预设 | 内置 Danbooru、AIBooru、Gelbooru、Safebooru、Yande.re、Nozomi.la，也支持自定义站点地址。 |
 | 下载队列 | 可以把多个标签搜索加入队列，按顺序下载、查看单项进度，并对失败任务重爬。 |
 | 并发下载 | 异步下载引擎，支持自定义并发数和请求超时。 |
 | 智能跳过 | 已存在文件会进行 MD5 校验，避免重复下载。 |
@@ -51,7 +51,7 @@ pip install -r requirements.txt
 
 正式 Windows 安装包请从 [GitHub Releases](https://github.com/storyAura/DanbooruDownload/releases/latest) 下载：
 
-1. 下载 `DanbooruDownload-v1.3.0-win-x64.zip`
+1. 下载 `DanbooruDownload-v1.3.1-win-x64.zip`
 2. 解压到任意目录
 3. 运行 `DanbooruDownload.exe`
 4. 运行依赖位于 `win-x64/` 文件夹，默认下载目录为 `Download/`
@@ -107,7 +107,7 @@ build_exe.bat
 4. 设置并发数、超时、跳过已存在文件、视频下载等选项。
 5. 可选开启同名 TXT 标签导出。
 6. 可选在设置窗口的“杂项”里开启自动图片转换，并选择 JPG/WebP、质量、WebP 无损和压缩程度。
-7. 搜索多个标签时用空格分隔，例如 `1girl solo rating:g`。Gelbooru、Konachan、Safebooru 同样使用空格分隔多标签。
+7. 搜索多个标签时用空格分隔，例如 `1girl solo rating:g`。Gelbooru、Safebooru 同样使用空格分隔多标签。
 8. 点击 `当前开始下载` 执行单次任务，或把多个任务加入队列后点击 `队列开始下载`。
 
 ### API 认证（全局）
@@ -186,6 +186,17 @@ auto_convert_keep_original: true
 python main.py --config my_config.yaml
 ```
 
+### Gelbooru（需要 API 凭据）
+
+Gelbooru 已关闭匿名 API 访问，所有请求都必须携带账户凭据，否则会返回 `401 Unauthorized`。在站点预设中选择 Gelbooru 时，界面会在站点下方显示提醒。
+
+- 登录 Gelbooru，打开 **My Account → Options**，复制 **数字 User ID** 和 **API Key**
+- 在 **设置 → API 认证** 中填写（用户名一栏填数字 User ID），保存后即可下载
+
+### 关于 Konachan
+
+Konachan 目前对 API 请求启用了 Cloudflare 人机验证（JS 质询），任何纯 HTTP 客户端都无法匿名访问，因此已从站点预设中移除。如仍需尝试，可在站点地址栏手动输入 `https://konachan.com`（能否成功取决于 Cloudflare 是否放行）。
+
 ### Nozomi.la
 
 Nozomi.la 使用独立的标签索引 API，不支持 Danbooru 风格的 `rating:`、`score:` 等 metatag；若任务中包含这些条件，程序会在日志中提示已忽略。
@@ -193,6 +204,7 @@ Nozomi.la 使用独立的标签索引 API，不支持 Danbooru 风格的 `rating
 - 标签用空格分隔，例如 `1girl solo`
 - 无需 API 认证
 - 在站点预设中选择 **Nozomi.la** 即可
+- 静态图片均以 `.webp` 格式提供（程序会自动使用正确的媒体地址）
 
 ### CLI 用法
 
@@ -271,7 +283,7 @@ CLI 默认文件名格式：
 | Feature | Description |
 | --- | --- |
 | GUI and CLI | Use the graphical app from `start.bat`, or automate downloads with `python main.py`. |
-| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, Safebooru, Yande.re, Konachan, Nozomi.la, plus custom URLs. |
+| Site presets | GUI presets for Danbooru, AIBooru, Gelbooru, Safebooru, Yande.re, Nozomi.la, plus custom URLs. |
 | Download queue | Add multiple tag searches to the GUI queue, run them in order, retry tasks, and track per-task progress. |
 | Concurrent downloads | Async downloader with configurable concurrency and request timeouts. |
 | Smart skipping | Existing files are checked by MD5 so repeated runs do not waste bandwidth. |
@@ -287,7 +299,7 @@ CLI 默认文件名格式：
 
 Get the official Windows bundle from [GitHub Releases](https://github.com/storyAura/DanbooruDownload/releases/latest):
 
-1. Download `DanbooruDownload-v1.3.0-win-x64.zip`
+1. Download `DanbooruDownload-v1.3.1-win-x64.zip`
 2. Extract it to any folder
 3. Run `DanbooruDownload.exe`
 4. Runtime files live in `win-x64/`; the default download folder is `Download/`
@@ -344,7 +356,7 @@ python main.py --config my_config.yaml
 python main.py -t "landscape" -l 50 --save-config my_config.yaml
 ```
 
-Use spaces between multiple search tags, for example `1girl solo rating:g`. Gelbooru, Konachan, and Safebooru use the same space-separated tag query style.
+Use spaces between multiple search tags, for example `1girl solo rating:g`. Gelbooru and Safebooru use the same space-separated tag query style.
 
 ### YAML Queue And Conversion Example
 
@@ -363,6 +375,17 @@ auto_convert_background_color: "#ff4fd8"
 auto_convert_keep_original: true
 ```
 
+### Gelbooru (API credentials required)
+
+Gelbooru has disabled anonymous API access; every request must carry account credentials or it returns `401 Unauthorized`. When you pick Gelbooru in the site preset menu, the GUI shows a reminder beneath the site picker.
+
+- Log in to Gelbooru, open **My Account → Options**, and copy your **numeric User ID** and **API Key**
+- Enter them in **Settings → API Credentials** (the username field takes the numeric User ID), then save
+
+### Konachan
+
+Konachan currently gates its API behind a Cloudflare JS challenge that blocks any plain HTTP client, so it has been removed from the site presets. You can still try it by typing `https://konachan.com` into the site URL field, though success depends on whether Cloudflare lets the request through.
+
 ### Nozomi.la
 
 Nozomi.la uses its own tag index API and does not support Danbooru-style metatags such as `rating:` or `score:`. Unsupported metatags are ignored and logged.
@@ -370,6 +393,7 @@ Nozomi.la uses its own tag index API and does not support Danbooru-style metatag
 - Separate tags with spaces, for example `1girl solo`
 - No API credentials required
 - Select **Nozomi.la** from the site preset menu
+- Static images are served as `.webp`; the app resolves the correct media URL automatically
 
 Queue tasks are currently used by the GUI. The CLI loads common download settings, TXT tag settings, and image conversion settings.
 

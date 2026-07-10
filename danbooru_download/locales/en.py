@@ -6,6 +6,7 @@ LOCALE = {
     "site_settings": "Site Settings",
     "site_preset": "Site",
     "site_url": "Site URL",
+    "site_hint_gelbooru": "⚠ Gelbooru has disabled anonymous API access. Enter your numeric User ID and API Key in Settings -> API Credentials before downloading.",
     "username": "Username",
     "api_key": "API Key",
     "optional": "Optional",

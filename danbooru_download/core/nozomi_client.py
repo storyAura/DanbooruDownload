@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import httpx
 
-APP_USER_AGENT = "DanbooruDownload/1.3.0"
+APP_USER_AGENT = "DanbooruDownload/1.3.1"
 
 
 NOZOMI_ROOT = "https://nozomi.la"
@@ -85,7 +85,10 @@ def build_media_url(dataid: str, media_type: str, is_video: bool = False) -> tup
     elif ext == "gif":
         subdomain = "g"
     else:
+        # Nozomi's CDN serves static images only as .webp; the original type
+        # reported in post metadata (jpg/png/avif) 404s on the media host.
         subdomain = "w"
+        ext = "webp"
     url = f"https://{subdomain}.{NOZOMI_CDN}/{dataid[-1]}/{dataid[-3:-1]}/{dataid}.{ext}"
     return url, ext
 

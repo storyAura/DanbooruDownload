@@ -52,7 +52,7 @@ DEFAULT_CREDENTIALS_PATH = default_credentials_path(APP_DIR)
 DEFAULT_FILENAME_FORMAT = "{artist}_{id}.{ext}"
 VIDEO_EXTENSIONS = {"mp4", "webm", "zip"}
 LOG_DIVIDER = "=" * 50
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 GITHUB_URL = "https://github.com/storyAura/DanbooruDownload"
 DEFAULT_SITE_URL = "https://danbooru.donmai.us"
 SITE_PRESETS = {
@@ -61,7 +61,6 @@ SITE_PRESETS = {
     "Gelbooru": "https://gelbooru.com",
     "Safebooru": "https://safebooru.donmai.us",
     "Yande.re": "https://yande.re",
-    "Konachan": "https://konachan.com",
     "Nozomi.la": "https://nozomi.la",
 }
 CUSTOM_SITE_LABEL = "Custom"
@@ -1293,12 +1292,26 @@ class DanbooruGUI(ctk.CTk):
         url = SITE_PRESETS.get(label)
         if url:
             self._set_site_url(url)
+        self._update_site_hint(label)
         self._hide_site_preset_menu()
 
     def _on_site_url_edit(self, _event=None):
         current_label = self._site_label_for_url(self._get_entry_text(self.var_url))
         if self.var_site_preset.get() != current_label:
             self._set_site_preset_label(current_label)
+        self._update_site_hint(current_label)
+
+    def _update_site_hint(self, label: str):
+        """Show a warning under the site picker for presets with known caveats."""
+        hint_label = getattr(self, "lbl_site_hint", None)
+        if hint_label is None:
+            return
+        if label == "Gelbooru":
+            hint_label.configure(text=self.t["site_hint_gelbooru"])
+            hint_label.pack(fill="x", anchor="w", pady=(6, 0))
+        else:
+            hint_label.configure(text="")
+            hint_label.pack_forget()
 
     def _toggle_site_preset_menu(self):
         if self.site_preset_popup and self.site_preset_popup.winfo_viewable():
@@ -1511,6 +1524,11 @@ class DanbooruGUI(ctk.CTk):
             **button_style("secondary"),
         )
         self.btn_site_preset.pack(fill="x")
+        self.lbl_site_hint = ctk.CTkLabel(
+            site_row, text="", anchor="w", justify="left",
+            font=ui_font("caption"), text_color=COLORS["warning"],
+            wraplength=320,
+        )
         self.var_url = ctk.CTkEntry(
             c, placeholder_text=DEFAULT_SITE_URL,
             height=34, corner_radius=8, border_color=COLORS["border"],
@@ -2234,6 +2252,7 @@ class DanbooruGUI(ctk.CTk):
         self.card_site.set_title(t["site_settings"])
         self._lbl_site_preset.configure(text=t["site_preset"])
         self._lbl_url.configure(text=t["site_url"])
+        self._update_site_hint(self.var_site_preset.get())
         self.card_search.set_title(t["search_settings"])
         self._lbl_tags.configure(text=t["search_tags"])
         self.var_tags.configure(placeholder_text=t["search_tags_hint"])
@@ -2388,7 +2407,9 @@ class DanbooruGUI(ctk.CTk):
             if val:
                 entry.insert(0, val)
         _set(self.var_url, config.base_url)
-        self._set_site_preset_label(self._site_label_for_url(config.base_url))
+        site_label = self._site_label_for_url(config.base_url)
+        self._set_site_preset_label(site_label)
+        self._update_site_hint(site_label)
         _set(self.var_tags, config.tags)
         _set(self.var_blocked, config.blocked_tags)
         self._set_rating_label(self._rating_rev.get(config.rating or "", self.t["rating_options"][0]))

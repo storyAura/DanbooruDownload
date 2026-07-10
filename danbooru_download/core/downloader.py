@@ -23,7 +23,7 @@ from danbooru_download.core.image_conversion import (
 )
 
 
-APP_USER_AGENT = "DanbooruDownload/1.3.0"
+APP_USER_AGENT = "DanbooruDownload/1.3.1"
 IMAGE_MAGIC_PREFIXES = (
     b"\xff\xd8\xff",
     b"\x89PNG\r\n\x1a\n",

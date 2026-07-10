@@ -93,15 +93,6 @@ class SiteSmokeTests(unittest.TestCase):
             raise
         self.assertTrue(isinstance(posts, list))
 
-    def test_konachan_post_json(self):
-        _skip_unless_smoke()
-        try:
-            posts = _search_one("https://konachan.com")
-        except RuntimeError as exc:
-            _skip_if_site_blocked(exc, "Konachan")
-            raise
-        self.assertTrue(isinstance(posts, list))
-
     def test_nozomi_index_range(self):
         _skip_unless_smoke()
         with _smoke_client() as client:

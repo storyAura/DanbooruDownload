@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlparse
 import httpx
 
 
-APP_USER_AGENT = "DanbooruDownload/1.3.0"
+APP_USER_AGENT = "DanbooruDownload/1.3.1"
 PROFILE_DANBOORU = "danbooru"
 PROFILE_MOEBOORU = "moebooru"
 PROFILE_GELBOORU = "gelbooru"

@@ -14,6 +14,7 @@ build/
 *.spec
 !DanbooruDownload.spec
 *.exe
+*.zip
 *.log
 .DS_Store
 Thumbs.db
