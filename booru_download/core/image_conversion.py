@@ -2,10 +2,13 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+import os
 import random
 import re
 
 from PIL import Image
+
+from booru_download.core.fs_safety import unique_tmp_path
 
 DEFAULT_BACKGROUND_COLOR = "#ff4fd8"
 VIVID_BACKGROUND_COLORS = (
@@ -97,29 +100,34 @@ class ImageConverter:
     def convert(self, image_path: str | Path) -> Path:
         source_path = Path(image_path)
         converted_path = self.converted_path(source_path)
-        tmp_path = converted_path.with_suffix(converted_path.suffix + ".tmp")
+        # Unique temp name so concurrent conversions to the same target never
+        # collide on a shared predictable ".tmp" file.
+        tmp_path = unique_tmp_path(converted_path)
         converted_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with Image.open(source_path) as image:
-            if self.config.format == "jpg":
-                output = self._prepare_jpg(image)
-                output.save(
-                    tmp_path,
-                    format="JPEG",
-                    quality=self.config.quality,
-                    optimize=True,
-                )
-            else:
-                output = self._prepare_webp(image)
-                output.save(
-                    tmp_path,
-                    format="WEBP",
-                    quality=self.config.quality,
-                    lossless=self.config.lossless,
-                    method=self.config.effort,
-                )
-
-        tmp_path.replace(converted_path)
+        try:
+            with Image.open(source_path) as image:
+                if self.config.format == "jpg":
+                    output = self._prepare_jpg(image)
+                    output.save(
+                        tmp_path,
+                        format="JPEG",
+                        quality=self.config.quality,
+                        optimize=True,
+                    )
+                else:
+                    output = self._prepare_webp(image)
+                    output.save(
+                        tmp_path,
+                        format="WEBP",
+                        quality=self.config.quality,
+                        lossless=self.config.lossless,
+                        method=self.config.effort,
+                    )
+            os.replace(tmp_path, converted_path)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
         return converted_path
 
     def _prepare_jpg(self, image: Image.Image) -> Image.Image:

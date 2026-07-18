@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from danbooru_download.core.config import Config
-from danbooru_download.core.credentials import (
+from booru_download.core.config import Config
+from booru_download.core.credentials import (
     CredentialsStore,
     get_auth_profile,
     parse_credential_blob,

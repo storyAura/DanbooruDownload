@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import httpx
 
-APP_USER_AGENT = "DanbooruDownload/1.3.1"
+APP_USER_AGENT = "BooruDownload/1.4.0"
 
 
 NOZOMI_ROOT = "https://nozomi.la"

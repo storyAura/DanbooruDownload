@@ -1,5 +1,5 @@
-from danbooru_download.locales.zh_cn import LOCALE as ZH_CN
-from danbooru_download.locales.en import LOCALE as EN
+from booru_download.locales.zh_cn import LOCALE as ZH_CN
+from booru_download.locales.en import LOCALE as EN
 
 I18N = {
     "zh": ZH_CN,

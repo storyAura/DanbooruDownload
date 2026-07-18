@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+from booru_download.core.fs_safety import normalize_file_ext
+
 
 # Characters not allowed in filenames on Windows
 _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -106,7 +108,9 @@ class FilenameFormatter:
             file_url = post.get("file_url", "") or post.get("large_file_url", "")
             if file_url:
                 ext = Path(file_url).suffix.lstrip(".")
-            ext = ext or "jpg"
+        # The extension is remote data; force it down to a plain token so it
+        # can never smuggle path separators into the final filename.
+        ext = normalize_file_ext(ext)
 
         # Extract date
         created = post.get("created_at", "")

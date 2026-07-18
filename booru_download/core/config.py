@@ -1,4 +1,4 @@
-"""Configuration management for DanbooruDownload."""
+"""Configuration management for BooruDownload."""
 
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
@@ -6,11 +6,17 @@ from typing import Optional
 
 import yaml
 
-from danbooru_download.core.formatter import (
+from booru_download.core.formatter import (
     DEFAULT_TAG_TEXT_CATEGORIES,
     normalize_tag_text_categories,
 )
-from danbooru_download.core.image_conversion import (
+from booru_download.core.fs_safety import (
+    atomic_write_yaml,
+    clamp_concurrency,
+    normalize_max_posts,
+    normalize_timeout,
+)
+from booru_download.core.image_conversion import (
     normalize_background_color,
     normalize_background_mode,
     normalize_convert_format,
@@ -158,9 +164,23 @@ class Config:
         )
         theme = str(data.get("ui_theme", "light") or "light").strip().lower()
         data["ui_theme"] = theme if theme in {"light", "dark"} else "light"
+        # Range-validate runtime limits: concurrent=0 hangs forever on the
+        # semaphore, negative values raise, timeout<=0 breaks httpx.
+        data["concurrent_downloads"] = clamp_concurrency(
+            data.get("concurrent_downloads", 8)
+        )
+        data["max_posts"] = normalize_max_posts(data.get("max_posts", 100))
+        data["timeout"] = normalize_timeout(data.get("timeout", 30.0))
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
-    def to_yaml(self, path: str | Path) -> None:
-        """Save current config to a YAML file."""
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(asdict(self), f, default_flow_style=False, allow_unicode=True)
+    def to_safe_dict(self, include_credentials: bool = False) -> dict:
+        """Serializable dict; credentials are stripped unless explicitly asked."""
+        data = asdict(self)
+        if not include_credentials:
+            data.pop("username", None)
+            data.pop("api_key", None)
+        return data
+
+    def to_yaml(self, path: str | Path, include_credentials: bool = False) -> None:
+        """Save current config to a YAML file atomically, without credentials."""
+        atomic_write_yaml(path, self.to_safe_dict(include_credentials))

@@ -4,7 +4,7 @@ import queue
 import time
 import webbrowser
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclass_replace
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -17,8 +17,8 @@ if sys.platform == "win32":
 import customtkinter as ctk
 from tkinter import PhotoImage, colorchooser, filedialog, messagebox, font as tkfont
 
-from danbooru_download.core.config import Config, QueueTaskConfig
-from danbooru_download.core.credentials import (
+from booru_download.core.config import Config, QueueTaskConfig
+from booru_download.core.credentials import (
     CredentialsStore,
     default_credentials_path,
     get_auth_profile,
@@ -26,18 +26,25 @@ from danbooru_download.core.credentials import (
     preset_for_url,
     validate_credentials,
 )
-from danbooru_download.core.danbooru_client import DanbooruClient
-from danbooru_download.core.image_conversion import (
+from booru_download.core.danbooru_client import DanbooruClient
+from booru_download.core.fs_safety import (
+    atomic_write_yaml,
+    clamp_concurrency,
+    normalize_max_posts,
+    normalize_timeout,
+    sanitize_subfolder,
+)
+from booru_download.core.image_conversion import (
     normalize_background_color,
     normalize_background_mode,
 )
-from danbooru_download.core.formatter import (
+from booru_download.core.formatter import (
     DEFAULT_TAG_TEXT_CATEGORIES,
     TAG_TEXT_CATEGORY_ORDER,
     FilenameFormatter,
 )
-from danbooru_download.core.downloader import Downloader
-from danbooru_download.locales import I18N, RATING_MAP_ZH, RATING_MAP_EN
+from booru_download.core.downloader import Downloader
+from booru_download.locales import I18N, RATING_MAP_ZH, RATING_MAP_EN
 
 def app_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -52,8 +59,8 @@ DEFAULT_CREDENTIALS_PATH = default_credentials_path(APP_DIR)
 DEFAULT_FILENAME_FORMAT = "{artist}_{id}.{ext}"
 VIDEO_EXTENSIONS = {"mp4", "webm", "zip"}
 LOG_DIVIDER = "=" * 50
-APP_VERSION = "1.3.1"
-GITHUB_URL = "https://github.com/storyAura/DanbooruDownload"
+APP_VERSION = "1.4.0"
+GITHUB_URL = "https://github.com/storyAura/BooruDownload"
 DEFAULT_SITE_URL = "https://danbooru.donmai.us"
 SITE_PRESETS = {
     "Danbooru": DEFAULT_SITE_URL,
@@ -1201,7 +1208,7 @@ class SettingsDialog(ctk.CTkToplevel):
         }
         return labels.get(self.background_mode_var.get(), "color")
 
-class DanbooruGUI(ctk.CTk):
+class BooruDownloadGUI(ctk.CTk):
 
     def __init__(self):
         super().__init__()
@@ -1241,10 +1248,13 @@ class DanbooruGUI(ctk.CTk):
         self._build_ui()
         self._load_default_config()
         self._poll_queue()
+        # Cooperative shutdown: cancel workers and wait before destroying Tk.
+        self._close_deadline: float | None = None
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _set_window_icon(self):
-        icon_ico_path = resource_path("danbooru_download", "assets", "app_icon.ico")
-        icon_png_path = resource_path("danbooru_download", "assets", "app_icon.png")
+        icon_ico_path = resource_path("booru_download", "assets", "app_icon.ico")
+        icon_png_path = resource_path("booru_download", "assets", "app_icon.png")
         try:
             if icon_ico_path.exists():
                 try:
@@ -1942,6 +1952,11 @@ class DanbooruGUI(ctk.CTk):
         self._set_buttons_running(True)
         self._rebuild_queue_list()
 
+        # Snapshot every Tk-backed setting on the main thread; the worker
+        # thread must never touch Tk/CustomTkinter widgets.
+        base_config = self._build_config()
+        download_video = bool(self.var_download_video.get())
+
         def _queue_worker():
             total_tasks = len(task_indices)
             for task_num, idx in enumerate(task_indices, 1):
@@ -1967,8 +1982,13 @@ class DanbooruGUI(ctk.CTk):
                 self._log_message("")
 
                 try:
-                    result = self._execute_single_task(item)
-                    item.status = "cancelled" if result == "cancelled" else "done"
+                    result = self._execute_single_task(item, base_config, download_video)
+                    if result == "cancelled":
+                        item.status = "cancelled"
+                    elif result in {"failed", "partial_fail"}:
+                        item.status = "failed"
+                    else:
+                        item.status = "done"
                 except Exception as e:
                     self._log_message(f"Error: {e}")
                     item.status = "failed"
@@ -1990,14 +2010,19 @@ class DanbooruGUI(ctk.CTk):
         self._download_thread = threading.Thread(target=_queue_worker, daemon=True)
         self._download_thread.start()
 
-    def _execute_single_task(self, item: QueueItem) -> str:
-        config = self._build_config()
-        config.tags = item.tags
-        config.save_dir = str(DEFAULT_DOWNLOAD_DIR / item.folder_name) if item.folder_name else str(DEFAULT_DOWNLOAD_DIR)
-        config.max_posts = item.max_posts
+    def _execute_single_task(
+        self, item: QueueItem, base_config: Config, download_video: bool
+    ) -> str:
+        # Runs on the worker thread: only plain-Python config values here.
+        sub = sanitize_subfolder(item.folder_name)
+        config = dataclass_replace(
+            base_config,
+            tags=item.tags,
+            save_dir=str(DEFAULT_DOWNLOAD_DIR / sub) if sub else str(DEFAULT_DOWNLOAD_DIR),
+            max_posts=item.max_posts,
+        )
 
         tags_query = config.build_tags_query()
-        download_video = bool(self.var_download_video.get())
         convert_status = config.auto_convert_format if config.auto_convert_images else "off"
 
         self._log_message(f"Convert: {convert_status}")
@@ -2062,6 +2087,10 @@ class DanbooruGUI(ctk.CTk):
         )
         if self._cancel_event.is_set():
             return "cancelled"
+        if dl.failed and not (dl.downloaded or dl.skipped):
+            return "failed"
+        if dl.failed:
+            return "partial_fail"
         return "success"
 
     def _current_site_preset(self) -> str:
@@ -2327,7 +2356,8 @@ class DanbooruGUI(ctk.CTk):
         return entry.get().strip()
 
     def _get_save_dir(self) -> str:
-        sub = self._get_entry_text(self.var_folder_name)
+        # Sanitize so "folder name" can never redirect output outside Download/.
+        sub = sanitize_subfolder(self._get_entry_text(self.var_folder_name))
         return str(DEFAULT_DOWNLOAD_DIR / sub) if sub else str(DEFAULT_DOWNLOAD_DIR)
 
     def _build_config(self) -> Config:
@@ -2339,18 +2369,9 @@ class DanbooruGUI(ctk.CTk):
                 min_score = int(s)
             except ValueError:
                 pass
-        try:
-            max_posts = int(self._get_entry_text(self.var_max_posts) or "100")
-        except ValueError:
-            max_posts = 100
-        try:
-            concurrent = int(self._get_entry_text(self.var_concurrent) or "8")
-        except ValueError:
-            concurrent = 8
-        try:
-            timeout = float(self._get_entry_text(self.var_timeout) or "30")
-        except ValueError:
-            timeout = 30.0
+        max_posts = normalize_max_posts(self._get_entry_text(self.var_max_posts) or "100")
+        concurrent = clamp_concurrency(self._get_entry_text(self.var_concurrent) or "8")
+        timeout = normalize_timeout(self._get_entry_text(self.var_timeout) or "30")
         if self.var_custom_name.get():
             fmt = self._get_entry_text(self.entry_filename) or DEFAULT_FILENAME_FORMAT
         else:
@@ -2486,6 +2507,8 @@ class DanbooruGUI(ctk.CTk):
 
     def _load_default_config(self):
         self._credentials_store.load()
+        if self._credentials_store.load_error:
+            self._log_message(self._credentials_store.load_error)
         if not DEFAULT_CONFIG_PATH.exists():
             return
         try:
@@ -2509,8 +2532,7 @@ class DanbooruGUI(ctk.CTk):
 
             config = self._build_config()
             data = self._task_config_dict(config)
-            with open(DEFAULT_CONFIG_PATH, "w", encoding="utf-8") as f:
-                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            atomic_write_yaml(DEFAULT_CONFIG_PATH, data)
             if not silent:
                 self._log_message(self.t["default_config_saved"].format(path=DEFAULT_CONFIG_PATH))
         except Exception as e:
@@ -2548,8 +2570,7 @@ class DanbooruGUI(ctk.CTk):
 
             config = self._build_config()
             data = self._task_config_dict(config)
-            with open(path, "w", encoding="utf-8") as f:
-                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            atomic_write_yaml(path, data)
             self._log_message(f"Config saved: {path}")
         except Exception as e:
             messagebox.showerror(t["export_fail"], t["export_fail_msg"].format(e))
@@ -2711,7 +2732,9 @@ class DanbooruGUI(ctk.CTk):
                     self._log_message(f"Failed: {stats['failed']}")
                 self._log_message(f"Saved: {Path(config.save_dir).resolve()}")
                 self._log_message(LOG_DIVIDER)
-                self._msg_queue.put(("done", "success"))
+                self._msg_queue.put(
+                    ("done", "partial_fail" if stats["failed"] else "success")
+                )
             except Exception as e:
                 self._log_message(f"\nError: {e}")
                 self._msg_queue.put(("done", "error"))
@@ -2737,8 +2760,30 @@ class DanbooruGUI(ctk.CTk):
             self.lbl_stats.configure(text=t["error_status"])
         elif result == "queue_done":
             self.lbl_stats.configure(text=t.get("queue_all_done", t["done"]))
+        elif result == "partial_fail":
+            self.lbl_stats.configure(text=t.get("partial_fail", t["error_status"]))
         else:
             self.lbl_stats.configure(text=t["done"])
+
+    def _on_close(self):
+        """Handle window close: stop workers gracefully instead of killing I/O."""
+        thread = self._download_thread
+        if thread and thread.is_alive():
+            self._cancel_event.set()
+            if self._close_deadline is None:
+                self._close_deadline = time.monotonic() + 15.0
+                self.lbl_stats.configure(text=self.t.get("closing", "..."))
+            self._await_worker_then_destroy()
+            return
+        self.destroy()
+
+    def _await_worker_then_destroy(self):
+        thread = self._download_thread
+        deadline = self._close_deadline or 0.0
+        if thread and thread.is_alive() and time.monotonic() < deadline:
+            self.after(100, self._await_worker_then_destroy)
+            return
+        self.destroy()
 
 def main():
     try:
@@ -2751,7 +2796,7 @@ def main():
     apply_theme_palette("light")
     ctk.set_default_color_theme("blue")
 
-    app = DanbooruGUI()
+    app = BooruDownloadGUI()
     app.mainloop()
 
 

@@ -1,6 +1,6 @@
 """Compatibility GUI entrypoint."""
 
-from danbooru_download.ui.app import DanbooruGUI, main
+from booru_download.ui.app import BooruDownloadGUI, main
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ Download/
 dist/
 build/
 *.spec
-!DanbooruDownload.spec
+!BooruDownload.spec
 *.exe
 *.zip
 *.log

@@ -1,4 +1,4 @@
-"""DanbooruDownload - CLI tool for downloading images from Danbooru and mirrors.
+"""BooruDownload - CLI tool for downloading images from booru sites.
 
 Usage examples:
     python main.py --tags "landscape rating:g score:>50" --limit 20
@@ -20,14 +20,14 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from danbooru_download.core.config import Config
-from danbooru_download.core.credentials import (
+from booru_download.core.config import Config
+from booru_download.core.credentials import (
     CredentialsStore,
     default_credentials_path,
 )
-from danbooru_download.core.danbooru_client import DanbooruClient
-from danbooru_download.core.formatter import FilenameFormatter
-from danbooru_download.core.downloader import Downloader
+from booru_download.core.danbooru_client import DanbooruClient
+from booru_download.core.formatter import FilenameFormatter
+from booru_download.core.downloader import Downloader
 
 
 def _app_dir() -> Path:
@@ -40,8 +40,8 @@ DEFAULT_CREDENTIALS_PATH = default_credentials_path(_app_dir())
 
 
 BANNER = """
-DanbooruDownload
-Fast image downloader for Danbooru
+BooruDownload
+Fast image downloader for booru sites
 """
 
 
@@ -107,7 +107,19 @@ Filename format placeholders:
     parser.add_argument("--timeout", type=float, default=30.0,
                         help="HTTP request timeout in seconds (default: 30)")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Fail fast on out-of-range values: concurrent=0 would wait forever on
+    # the semaphore and negative values raise deep inside asyncio.
+    if not 1 <= args.concurrent <= 64:
+        parser.error("--concurrent must be between 1 and 64")
+    if args.limit < 1:
+        parser.error("--limit must be at least 1")
+    if not (args.timeout > 0 and args.timeout == args.timeout
+            and args.timeout != float("inf")):
+        parser.error("--timeout must be a finite number greater than 0")
+
+    return args
 
 
 def build_config(args: argparse.Namespace) -> Config:
@@ -164,10 +176,11 @@ def main():
     args = parse_args()
     config = build_config(args)
 
-    # Save config and exit if requested
+    # Save config and exit if requested (credentials are never written to
+    # task configs; they stay in the global credential store)
     if args.save_config:
         config.to_yaml(args.save_config)
-        print(f"OK Config saved to: {args.save_config}")
+        print(f"OK Config saved to: {args.save_config} (credentials excluded)")
         return
 
     # Validate
@@ -248,13 +261,24 @@ def main():
     print(f"Saved to:    {Path(config.save_dir).resolve()}")
     print("=" * 42)
 
+    # Non-zero exit when any file failed so scripts/schedulers can react.
+    if stats["failed"]:
+        sys.exit(1)
 
-if __name__ == "__main__":
+
+def run():
+    """CLI entrypoint with exit-code semantics shared by all launchers."""
     try:
         main()
     except KeyboardInterrupt:
         print("\n\nDownload cancelled by user.")
-        sys.exit(0)
+        sys.exit(130)
+    except SystemExit:
+        raise
     except Exception as e:
         print(f"\nError: {e}")
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    run()

@@ -1,7 +1,7 @@
 """Compatibility CLI entrypoint."""
 
-from danbooru_download.cli import main
+from booru_download.cli import run
 
 
 if __name__ == "__main__":
-    main()
+    run()

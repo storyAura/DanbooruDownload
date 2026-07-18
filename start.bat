@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
-title DanbooruDownload v1.1.0
+title BooruDownload
 
 set "VENV_PY=.venv\Scripts\python.exe"
 set "VENV_PYW=.venv\Scripts\pythonw.exe"
@@ -24,7 +24,8 @@ if exist "%VENV_PY%" (
 if not exist "%VENV_PY%" (
     echo [INFO] Creating virtual environment...
     python -m venv .venv
-    if %ERRORLEVEL% neq 0 (
+    rem %ERRORLEVEL% expands before the block runs; "if errorlevel" reads live
+    if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment.
         pause
         exit /b 1
@@ -33,10 +34,10 @@ if not exist "%VENV_PY%" (
 
 echo [INFO] Checking dependencies...
 "%VENV_PY%" -c "import httpx, tqdm, yaml, customtkinter, anyio, typing_extensions" >nul 2>&1
-if %ERRORLEVEL% neq 0 (
+if errorlevel 1 (
     echo [INFO] Installing dependencies...
     "%VENV_PY%" -m pip install -r requirements.txt -q
-    if %ERRORLEVEL% neq 0 (
+    if errorlevel 1 (
         echo [ERROR] Failed to install dependencies.
         pause
         exit /b 1
@@ -44,5 +45,5 @@ if %ERRORLEVEL% neq 0 (
     echo [INFO] Dependencies installed successfully.
 )
 
-echo [INFO] Starting DanbooruDownload...
+echo [INFO] Starting BooruDownload...
 start "" "%VENV_PYW%" gui.py

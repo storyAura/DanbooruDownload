@@ -2,7 +2,7 @@ import struct
 import unittest
 from unittest.mock import MagicMock, patch
 
-from danbooru_download.core.nozomi_client import (
+from booru_download.core.nozomi_client import (
     NozomiClient,
     build_media_url,
     decode_nozomi_bytes,

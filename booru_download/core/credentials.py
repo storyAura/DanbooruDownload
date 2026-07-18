@@ -10,14 +10,18 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
-from danbooru_download.core.danbooru_client import (
+from booru_download.core.danbooru_client import (
     PROFILE_DANBOORU,
     PROFILE_GELBOORU,
     PROFILE_MOEBOORU,
     PROFILE_NOZOMI,
     _detect_profile,
 )
-from danbooru_download.core.config import Config
+from booru_download.core.config import Config
+from booru_download.core.fs_safety import (
+    atomic_write_yaml,
+    quarantine_corrupt_file,
+)
 
 
 SITE_PRESET_URLS = {
@@ -168,17 +172,34 @@ class CredentialsStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._credentials: dict[str, SiteCredential] = {}
+        self.load_error: Optional[str] = None
 
     def load(self) -> None:
+        """Load credentials; a corrupt file is quarantined instead of crashing.
+
+        A broken api_credentials.yaml must never prevent the app from
+        starting, so parse errors move the file aside and start empty.
+        """
+        self._credentials = {}
+        self.load_error = None
         if not self.path.exists():
-            self._credentials = {}
             return
 
-        with open(self.path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            if not isinstance(data, dict):
+                raise ValueError("credentials file root must be a mapping")
+        except (OSError, yaml.YAMLError, ValueError) as e:
+            quarantined = quarantine_corrupt_file(self.path)
+            self.load_error = (
+                f"Corrupt credentials file moved to {quarantined}: {e}"
+                if quarantined
+                else f"Failed to read credentials file: {e}"
+            )
+            return
 
         raw = data.get("credentials", {})
-        self._credentials = {}
         if not isinstance(raw, dict):
             return
 
@@ -201,9 +222,7 @@ class CredentialsStore:
                 if cred.username or cred.api_key
             }
         }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
-            yaml.dump(payload, f, default_flow_style=False, allow_unicode=True)
+        atomic_write_yaml(self.path, payload)
 
     def get_for_preset(self, preset: str) -> SiteCredential:
         return self._credentials.get(preset, SiteCredential())

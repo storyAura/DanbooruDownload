@@ -1,6 +1,6 @@
 import unittest
 
-from danbooru_download.ui.app import is_hex_background_color
+from booru_download.ui.app import is_hex_background_color
 
 
 class UiBackgroundColorTests(unittest.TestCase):

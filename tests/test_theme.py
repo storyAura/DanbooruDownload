@@ -1,6 +1,6 @@
 import unittest
 
-from danbooru_download.ui.app import (
+from booru_download.ui.app import (
     COLORS,
     THEME_DARK,
     THEME_LIGHT,

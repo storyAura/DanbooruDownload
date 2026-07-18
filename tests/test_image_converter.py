@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from danbooru_download.core.image_conversion import ImageConversionConfig, ImageConverter
+from booru_download.core.image_conversion import ImageConversionConfig, ImageConverter
 
 
 def create_rgba_png(path: Path) -> None:

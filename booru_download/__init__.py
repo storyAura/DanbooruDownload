@@ -1,0 +1,2 @@
+"""BooruDownload package."""
+

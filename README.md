@@ -1,18 +1,18 @@
-# DanbooruDownload
+# BooruDownload
 
 快速、易用的 Danbooru 及兼容站点批量下载工具，提供 CustomTkinter 图形界面和命令行两种使用方式。
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
-Current version: `v1.3.1`
+Current version: `v1.4.0`
 
-v1.3.1 fixes Nozomi.la media downloads (static images are served only as `.webp`), removes the Cloudflare-blocked Konachan preset, and adds an in-app reminder that Gelbooru now requires API credentials. See [UPDATE.md](UPDATE.md) for the full changelog.
+v1.4.0 renames the project to BooruDownload (it long ago outgrew Danbooru-only support) and hardens the whole download pipeline: atomic file writes with streaming MD5 verification, path-escape protection, corrupt-file self-healing on Windows, safe cancellation, crash-free queue threading, and non-zero exit codes on failures. See [UPDATE.md](UPDATE.md) for the full changelog.
 
 ## 版本更新
 
-当前版本：`v1.3.1`
+当前版本：`v1.4.0`
 
-本次版本修复 Nozomi.la 图片下载（静态图仅提供 `.webp` 格式）、移除被 Cloudflare 拦截的 Konachan 预设，并在界面中提示 Gelbooru 现已需要 API 凭据。完整更新记录见 [UPDATE.md](UPDATE.md)。
+本次版本将项目更名为 BooruDownload（支持站点早已不限于 Danbooru），并全面加固下载链路：原子写入 + 流式 MD5 校验、路径逃逸防护、Windows 损坏文件自愈、安全取消、队列线程不再触碰界面控件、失败时返回非零退出码。完整更新记录见 [UPDATE.md](UPDATE.md)。
 
 ## 中文说明
 
@@ -49,11 +49,11 @@ pip install -r requirements.txt
 
 ### Windows 下载
 
-正式 Windows 安装包请从 [GitHub Releases](https://github.com/storyAura/DanbooruDownload/releases/latest) 下载：
+正式 Windows 安装包请从 [GitHub Releases](https://github.com/storyAura/BooruDownload/releases/latest) 下载：
 
-1. 下载 `DanbooruDownload-v1.3.1-win-x64.zip`
+1. 下载 `BooruDownload-v1.4.0-win-x64.zip`
 2. 解压到任意目录
-3. 运行 `DanbooruDownload.exe`
+3. 运行 `BooruDownload.exe`
 4. 运行依赖位于 `win-x64/` 文件夹，默认下载目录为 `Download/`
 
 开发者仍可使用 `start.bat` 从源码启动，或使用 `build_exe.bat` 自行打包。
@@ -61,8 +61,8 @@ pip install -r requirements.txt
 ### 快速开始
 
 ```bash
-git clone https://github.com/storyAura/DanbooruDownload.git
-cd DanbooruDownload
+git clone https://github.com/storyAura/BooruDownload.git
+cd BooruDownload
 ```
 
 启动 GUI：
@@ -79,13 +79,13 @@ start.bat
 build_exe.bat
 ```
 
-`build_exe.bat` 会安装打包依赖、运行测试和编译检查，然后输出 `dist\DanbooruDownload\DanbooruDownload.exe`。运行依赖放在 `win-x64` 文件夹，根目录只保留必要的 `Download` 下载文件夹。日常用户请优先从 Releases 下载；开发者快速测试推荐使用 `start.bat`。
+`build_exe.bat` 会安装打包依赖、运行测试和编译检查，然后输出 `dist\BooruDownload\BooruDownload.exe`。运行依赖放在 `win-x64` 文件夹，根目录只保留必要的 `Download` 下载文件夹。日常用户请优先从 Releases 下载；开发者快速测试推荐使用 `start.bat`。
 
 ### 实机演示
 
 主界面：
 
-![DanbooruDownload 主界面](docs/screenshots/gui-overview.png)
+![BooruDownload 主界面](docs/screenshots/gui-overview.png)
 
 站点预设：
 
@@ -297,11 +297,11 @@ CLI 默认文件名格式：
 
 ### Download (Windows)
 
-Get the official Windows bundle from [GitHub Releases](https://github.com/storyAura/DanbooruDownload/releases/latest):
+Get the official Windows bundle from [GitHub Releases](https://github.com/storyAura/BooruDownload/releases/latest):
 
-1. Download `DanbooruDownload-v1.3.1-win-x64.zip`
+1. Download `BooruDownload-v1.4.0-win-x64.zip`
 2. Extract it to any folder
-3. Run `DanbooruDownload.exe`
+3. Run `BooruDownload.exe`
 4. Runtime files live in `win-x64/`; the default download folder is `Download/`
 
 Developers can still launch from source with `start.bat`, or rebuild with `build_exe.bat`.
@@ -309,8 +309,8 @@ Developers can still launch from source with `start.bat`, or rebuild with `build
 ### Quick Start
 
 ```bash
-git clone https://github.com/storyAura/DanbooruDownload.git
-cd DanbooruDownload
+git clone https://github.com/storyAura/BooruDownload.git
+cd BooruDownload
 ```
 
 ```bat
@@ -325,13 +325,13 @@ To build the Windows EXE:
 build_exe.bat
 ```
 
-`build_exe.bat` installs build dependencies, runs tests and compile checks, then writes `dist\DanbooruDownload\DanbooruDownload.exe`. Runtime files are placed in `win-x64`, and the bundle root keeps only the necessary `Download` folder for downloaded files. End users should download from Releases; for quick development testing, keep using `start.bat`.
+`build_exe.bat` installs build dependencies, runs tests and compile checks, then writes `dist\BooruDownload\BooruDownload.exe`. Runtime files are placed in `win-x64`, and the bundle root keeps only the necessary `Download` folder for downloaded files. End users should download from Releases; for quick development testing, keep using `start.bat`.
 
 ### Screenshots
 
 Main interface:
 
-![DanbooruDownload main interface](docs/screenshots/gui-overview.png)
+![BooruDownload main interface](docs/screenshots/gui-overview.png)
 
 Site presets:
 
@@ -400,14 +400,14 @@ Queue tasks are currently used by the GUI. The CLI loads common download setting
 ## Project Structure
 
 ```text
-DanbooruDownload/
+BooruDownload/
 |-- gui.py                     # Compatibility GUI entry point
 |-- main.py                    # Compatibility CLI entry point
 |-- config.py                  # Compatibility wrapper
 |-- danbooru_client.py         # Compatibility wrapper
 |-- downloader.py              # Compatibility wrapper
 |-- formatter.py               # Compatibility wrapper
-|-- danbooru_download/
+|-- booru_download/
 |   |-- cli.py                 # CLI implementation
 |   |-- core/
 |   |   |-- config.py          # YAML config model and loader
@@ -424,7 +424,7 @@ DanbooruDownload/
 |-- start.bat                  # Windows launcher
 |-- api_credentials.yaml       # Global API credentials (created from Settings)
 |-- build_exe.bat              # PyInstaller packaging script
-|-- DanbooruDownload.spec      # PyInstaller onedir build config
+|-- BooruDownload.spec      # PyInstaller onedir build config
 |-- requirements-build.txt     # Packaging-only dependencies
 `-- requirements.txt           # Python dependencies
 ```

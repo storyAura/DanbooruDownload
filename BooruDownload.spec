@@ -8,7 +8,7 @@ block_cipher = None
 customtkinter_datas = collect_data_files("customtkinter")
 customtkinter_hiddenimports = collect_submodules("customtkinter")
 app_datas = [
-    ("danbooru_download/assets", "danbooru_download/assets"),
+    ("booru_download/assets", "booru_download/assets"),
 ]
 
 a = Analysis(
@@ -31,7 +31,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="DanbooruDownload",
+    name="BooruDownload",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -42,7 +42,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="danbooru_download/assets/app_icon.ico",
+    icon="booru_download/assets/app_icon.ico",
     contents_directory="win-x64",
 )
 
@@ -53,5 +53,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="DanbooruDownload",
+    name="BooruDownload",
 )

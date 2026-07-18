@@ -3,9 +3,9 @@ import unittest
 
 import httpx
 
-from danbooru_download.core.credentials import SITE_PRESET_URLS
-from danbooru_download.core.danbooru_client import APP_USER_AGENT, DanbooruClient
-from danbooru_download.core.nozomi_client import NOZOMI_INDEX_HOST, NozomiClient
+from booru_download.core.credentials import SITE_PRESET_URLS
+from booru_download.core.danbooru_client import APP_USER_AGENT, DanbooruClient
+from booru_download.core.nozomi_client import NOZOMI_INDEX_HOST, NozomiClient
 
 
 RUN_SITE_SMOKE = os.environ.get("RUN_SITE_SMOKE") == "1"

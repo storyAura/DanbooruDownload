@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul 2>&1
 setlocal
-title Build DanbooruDownload EXE
+title Build BooruDownload EXE
 
-set "APP_NAME=DanbooruDownload"
+set "APP_NAME=BooruDownload"
 set "VENV_PY=.venv\Scripts\python.exe"
 set "DIST_DIR=dist\%APP_NAME%"
 set "EXE_PATH=%DIST_DIR%\%APP_NAME%.exe"
@@ -59,7 +59,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] Checking Python syntax...
-"%VENV_PY%" -m compileall danbooru_download config.py danbooru_client.py downloader.py formatter.py gui.py main.py
+"%VENV_PY%" -m compileall booru_download config.py danbooru_client.py downloader.py formatter.py gui.py main.py
 if errorlevel 1 (
     echo [ERROR] Compile check failed. Packaging stopped.
     pause
@@ -71,7 +71,7 @@ if exist "build" rmdir /s /q "build"
 if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%"
 
 echo [INFO] Building %APP_NAME%.exe...
-"%VENV_PY%" -m PyInstaller DanbooruDownload.spec --noconfirm
+"%VENV_PY%" -m PyInstaller BooruDownload.spec --noconfirm
 if errorlevel 1 (
     echo [ERROR] PyInstaller build failed.
     pause

@@ -1,3 +1,3 @@
 """Compatibility wrapper for packaged English locale."""
 
-from danbooru_download.locales.en import LOCALE  # noqa: F401
+from booru_download.locales.en import LOCALE  # noqa: F401

@@ -8,8 +8,10 @@ from urllib.parse import unquote, urlparse
 
 import httpx
 
+from booru_download.core.fs_safety import normalize_file_ext
 
-APP_USER_AGENT = "DanbooruDownload/1.3.1"
+
+APP_USER_AGENT = "BooruDownload/1.4.0"
 PROFILE_DANBOORU = "danbooru"
 PROFILE_MOEBOORU = "moebooru"
 PROFILE_GELBOORU = "gelbooru"
@@ -146,7 +148,7 @@ def _normalize_post(
         {
             "file_url": file_url,
             "large_file_url": large_file_url,
-            "file_ext": str(file_ext or "jpg").lower(),
+            "file_ext": normalize_file_ext(file_ext),
             "md5": normalized.get("md5", "") or "",
             "rating": _normalize_rating(normalized.get("rating")),
             "score": _coerce_int(normalized.get("score"), 0),
@@ -288,7 +290,7 @@ class DanbooruClient:
             List of normalized post dicts from the API.
         """
         if self.profile == PROFILE_NOZOMI:
-            from danbooru_download.core.nozomi_client import NozomiClient
+            from booru_download.core.nozomi_client import NozomiClient
 
             with NozomiClient(timeout=self.timeout) as nozomi:
                 return [
@@ -335,7 +337,7 @@ class DanbooruClient:
     ) -> Generator[dict, None, None]:
         """Search and paginate through all results up to max_posts."""
         if self.profile == PROFILE_NOZOMI:
-            from danbooru_download.core.nozomi_client import NozomiClient
+            from booru_download.core.nozomi_client import NozomiClient
 
             with NozomiClient(timeout=self.timeout) as nozomi:
                 for post in nozomi.search_all(tags=tags, max_posts=max_posts, on_log=on_log):
@@ -378,7 +380,7 @@ class DanbooruClient:
     def get_post(self, post_id: int) -> dict:
         """Get a single post by ID."""
         if self.profile == PROFILE_NOZOMI:
-            from danbooru_download.core.nozomi_client import NozomiClient
+            from booru_download.core.nozomi_client import NozomiClient
 
             with NozomiClient(timeout=self.timeout) as nozomi:
                 post = nozomi.fetch_post(post_id)
