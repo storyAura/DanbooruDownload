@@ -123,30 +123,31 @@ class FilenameFormatter:
         else:
             date_str = "unknown"
 
+        # All tags (first 10) — also used as filename fallback on flat-tag sites.
+        all_tags_raw = post.get("tag_string", "") or ""
+        all_tags = [t for t in all_tags_raw.split() if t][:10]
+        tags_str = "+".join(all_tags) if all_tags else ""
+        tag_fallback = "+".join(all_tags[:2]) if all_tags else "unknown"
+
         # Build artist string (take first 3 artists max)
         artist_raw = _extract_tags_by_category(post, "artist")
-        artists = [a for a in artist_raw.split() if a] [:3]
-        artist_str = "+".join(artists) if artists else "unknown"
+        artists = [a for a in artist_raw.split() if a][:3]
+        artist_str = "+".join(artists) if artists else tag_fallback
 
         # Character
         char_raw = _extract_tags_by_category(post, "character")
         chars = [c for c in char_raw.split() if c][:3]
-        char_str = "+".join(chars) if chars else "unknown"
+        char_str = "+".join(chars) if chars else tag_fallback
 
         # Copyright
         copy_raw = _extract_tags_by_category(post, "copyright")
         copies = [c for c in copy_raw.split() if c][:3]
-        copy_str = "+".join(copies) if copies else "unknown"
+        copy_str = "+".join(copies) if copies else tag_fallback
 
         # General tags (first 5)
         gen_raw = _extract_tags_by_category(post, "general")
         gens = [g for g in gen_raw.split() if g][:5]
         gen_str = "+".join(gens) if gens else ""
-
-        # All tags (first 10)
-        all_tags_raw = post.get("tag_string", "")
-        all_tags = [t for t in all_tags_raw.split() if t][:10]
-        tags_str = "+".join(all_tags) if all_tags else ""
 
         # Rating map
         rating_map = {"g": "general", "s": "sensitive", "q": "questionable", "e": "explicit"}

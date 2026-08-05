@@ -30,6 +30,7 @@ from booru_download.core.danbooru_client import DanbooruClient
 from booru_download.core.fs_safety import (
     atomic_write_yaml,
     clamp_concurrency,
+    is_video_extension,
     normalize_max_posts,
     normalize_timeout,
     sanitize_subfolder,
@@ -57,9 +58,8 @@ DEFAULT_DOWNLOAD_DIR = APP_DIR / "Download"
 DEFAULT_CONFIG_PATH = APP_DIR / "default_config.yaml"
 DEFAULT_CREDENTIALS_PATH = default_credentials_path(APP_DIR)
 DEFAULT_FILENAME_FORMAT = "{artist}_{id}.{ext}"
-VIDEO_EXTENSIONS = {"mp4", "webm", "zip"}
 LOG_DIVIDER = "=" * 50
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 GITHUB_URL = "https://github.com/storyAura/BooruDownload"
 DEFAULT_SITE_URL = "https://danbooru.donmai.us"
 SITE_PRESETS = {
@@ -725,20 +725,6 @@ class SettingsDialog(ctk.CTkToplevel):
             self.var_auto_convert.select()
         self.var_auto_convert.pack(anchor="w", pady=(4, 8))
 
-        self.var_keep_original = ctk.CTkCheckBox(
-            card_misc.content,
-            text=self.t["auto_convert_keep_original"],
-            font=ui_font("body"),
-            text_color=COLORS["text_primary"],
-            fg_color=COLORS["accent"],
-            hover_color=COLORS["accent_hover"],
-            border_color=COLORS["border_strong"],
-            command=self._sync_conversion,
-        )
-        if self._config.auto_convert_keep_original:
-            self.var_keep_original.select()
-        self.var_keep_original.pack(anchor="w", pady=(0, 8))
-
         row_convert = ctk.CTkFrame(card_misc.content, fg_color="transparent")
         row_convert.pack(fill="x", pady=(0, 8))
         ctk.CTkLabel(
@@ -761,6 +747,31 @@ class SettingsDialog(ctk.CTkToplevel):
             font=ui_font("body"),
             command=lambda _value: self._sync_conversion(),
         ).pack(side="left", padx=(8, 0))
+
+        # Off by default (= keep originals). Checked means delete originals
+        # after conversion — clearer than the old inverted “keep original” label.
+        self.var_replace_original = ctk.CTkCheckBox(
+            card_misc.content,
+            text=self.t["auto_convert_replace_original"],
+            font=ui_font("body"),
+            text_color=COLORS["text_primary"],
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
+            border_color=COLORS["border_strong"],
+            command=self._sync_conversion,
+        )
+        if not self._config.auto_convert_keep_original:
+            self.var_replace_original.select()
+        self.var_replace_original.pack(anchor="w", pady=(0, 2))
+        self.lbl_replace_original_hint = ctk.CTkLabel(
+            card_misc.content,
+            text=self.t["auto_convert_replace_original_hint"],
+            font=ui_font("caption"),
+            text_color=COLORS["text_muted"],
+            wraplength=400,
+            justify="left",
+        )
+        self.lbl_replace_original_hint.pack(anchor="w", pady=(0, 8))
 
         self.var_convert_quality = ctk.IntVar(value=self._config.auto_convert_quality)
         self.lbl_convert_quality = self._build_slider_row(
@@ -1106,8 +1117,9 @@ class SettingsDialog(ctk.CTkToplevel):
             self.btn_bg_color.configure(state=state)
             self._last_conversion_is_webp = is_webp
         self._sync_background_color_preview()
-        keep_original_state = "normal" if self.var_auto_convert.get() else "disabled"
-        self.var_keep_original.configure(state=keep_original_state)
+        replace_state = "normal" if self.var_auto_convert.get() else "disabled"
+        self.var_replace_original.configure(state=replace_state)
+        keep_original = not bool(self.var_replace_original.get())
         self.lbl_convert_quality.configure(
             text=f"{self.t['auto_convert_quality']}: {self.var_convert_quality.get()}"
         )
@@ -1122,7 +1134,7 @@ class SettingsDialog(ctk.CTkToplevel):
             int(self.var_convert_effort.get()),
             background_mode,
             self.entry_bg_color.get().strip(),
-            bool(self.var_keep_original.get()),
+            keep_original,
         )
 
     def _save_default(self):
@@ -1239,6 +1251,7 @@ class BooruDownloadGUI(ctk.CTk):
         self._auto_convert_keep_original = True
         self._ui_theme = "light"
         apply_theme_palette(self._ui_theme)
+        self._save_root = Path(DEFAULT_DOWNLOAD_DIR)
         self._credentials_store = CredentialsStore(DEFAULT_CREDENTIALS_PATH)
         self._credentials_store.load()
         self.site_preset_popup = None
@@ -1605,19 +1618,25 @@ class BooruDownloadGUI(ctk.CTk):
             font=ui_font("body"), text_color=COLORS["text_primary"],
         )
         self._lbl_folder = form_row(c, t["folder_name"], self.var_folder_name)
-        self.lbl_path_preview = ctk.CTkLabel(
-            c, text=t["save_path_label"] + str(DEFAULT_DOWNLOAD_DIR) + "/",
-            font=ui_font("caption"), text_color=COLORS["text_muted"],
-            wraplength=430, justify="left",
+        row_path = ctk.CTkFrame(c, fg_color="transparent")
+        row_path.pack(fill="x", pady=(0, 8))
+        self.btn_browse_folder = ctk.CTkButton(
+            row_path, text=t["browse_folder"], width=90, height=30,
+            corner_radius=8, fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["border"], text_color=COLORS["text_primary"],
+            border_width=1, border_color=COLORS["border"],
+            font=ui_font("body"), command=self._browse_save_root,
         )
-        self.lbl_path_preview.pack(anchor="w", pady=(0, 8))
+        self.btn_browse_folder.pack(side="right", padx=(8, 0))
+        self.lbl_path_preview = ctk.CTkLabel(
+            row_path, text=t["save_path_label"] + str(self._save_root) + "/",
+            font=ui_font("caption"), text_color=COLORS["text_muted"],
+            wraplength=330, justify="left", anchor="w",
+        )
+        self.lbl_path_preview.pack(side="left", fill="x", expand=True)
 
-        def _update_path_preview(*_args):
-            sub = self.var_folder_name.get().strip()
-            preview = str(DEFAULT_DOWNLOAD_DIR / sub) if sub else str(DEFAULT_DOWNLOAD_DIR)
-            self.lbl_path_preview.configure(text=self.t["save_path_label"] + preview + "/")
-
-        self.var_folder_name.bind("<KeyRelease>", _update_path_preview)
+        self.var_folder_name.bind("<KeyRelease>", lambda *_: self._update_path_preview())
+        self._update_path_preview()
 
         row_fn = ctk.CTkFrame(c, fg_color="transparent")
         row_fn.pack(fill="x", pady=(8, 4))
@@ -1940,8 +1959,26 @@ class BooruDownloadGUI(ctk.CTk):
             return
         self._start_queue_items(waiting)
 
+    def _ensure_auth_ready(self, config: Config) -> bool:
+        """Block downloads that would immediately 401 for auth-required sites."""
+        auth = get_auth_profile(config.base_url)
+        if not auth.auth_required:
+            return True
+        errors = validate_credentials(config.base_url, config.username, config.api_key)
+        if not errors:
+            return True
+        if messagebox.askyesno(self.t["auth_required_title"], self.t["auth_required_msg"]):
+            self._open_settings()
+        return False
+
     def _start_queue_items(self, task_indices: list[int]):
         if self._queue_running or not task_indices:
+            return
+
+        # Snapshot every Tk-backed setting on the main thread; the worker
+        # thread must never touch Tk/CustomTkinter widgets.
+        base_config = self._build_config()
+        if not self._ensure_auth_ready(base_config):
             return
 
         self._queue_running = True
@@ -1952,10 +1989,8 @@ class BooruDownloadGUI(ctk.CTk):
         self._set_buttons_running(True)
         self._rebuild_queue_list()
 
-        # Snapshot every Tk-backed setting on the main thread; the worker
-        # thread must never touch Tk/CustomTkinter widgets.
-        base_config = self._build_config()
         download_video = bool(self.var_download_video.get())
+        save_root = Path(self._save_root)
 
         def _queue_worker():
             total_tasks = len(task_indices)
@@ -1976,13 +2011,17 @@ class BooruDownloadGUI(ctk.CTk):
                 self._msg_queue.put(("rebuild_queue", None))
                 self._log_message("")
                 self._log_message(self.t["queue_task_start_fmt"].format(n=task_num, total=total_tasks))
-                self._log_message(f"Tags: {item.tags}")
-                self._log_message(f"Folder: {item.folder_name or 'Download/'}")
-                self._log_message(f"Max: {item.max_posts}")
+                self._log_message(self.t["log_tags_fmt"].format(tags=item.tags))
+                self._log_message(
+                    self.t["log_folder_fmt"].format(folder=item.folder_name or f"{save_root.name}/")
+                )
+                self._log_message(self.t["log_max_fmt"].format(max=item.max_posts))
                 self._log_message("")
 
                 try:
-                    result = self._execute_single_task(item, base_config, download_video)
+                    result = self._execute_single_task(
+                        item, base_config, download_video, save_root
+                    )
                     if result == "cancelled":
                         item.status = "cancelled"
                     elif result in {"failed", "partial_fail"}:
@@ -1990,7 +2029,7 @@ class BooruDownloadGUI(ctk.CTk):
                     else:
                         item.status = "done"
                 except Exception as e:
-                    self._log_message(f"Error: {e}")
+                    self._log_message(self.t["log_error_fmt"].format(error=e))
                     item.status = "failed"
 
                 self._msg_queue.put(("rebuild_queue", None))
@@ -2011,22 +2050,27 @@ class BooruDownloadGUI(ctk.CTk):
         self._download_thread.start()
 
     def _execute_single_task(
-        self, item: QueueItem, base_config: Config, download_video: bool
+        self,
+        item: QueueItem,
+        base_config: Config,
+        download_video: bool,
+        save_root: Path,
     ) -> str:
         # Runs on the worker thread: only plain-Python config values here.
         sub = sanitize_subfolder(item.folder_name)
         config = dataclass_replace(
             base_config,
             tags=item.tags,
-            save_dir=str(DEFAULT_DOWNLOAD_DIR / sub) if sub else str(DEFAULT_DOWNLOAD_DIR),
+            save_dir=str(save_root / sub) if sub else str(save_root),
             max_posts=item.max_posts,
         )
 
         tags_query = config.build_tags_query()
         convert_status = config.auto_convert_format if config.auto_convert_images else "off"
+        t = self.t
 
-        self._log_message(f"Convert: {convert_status}")
-        self._log_message("Searching posts...")
+        self._log_message(t["log_convert_fmt"].format(status=convert_status))
+        self._log_message(t["log_searching"])
         with DanbooruClient(
             base_url=config.base_url, username=config.username,
             api_key=config.api_key, timeout=config.timeout,
@@ -2038,14 +2082,14 @@ class BooruDownloadGUI(ctk.CTk):
 
         if not download_video:
             before = len(posts)
-            posts = [p for p in posts if (p.get("file_ext", "") or "").lower() not in VIDEO_EXTENSIONS]
+            posts = [p for p in posts if not is_video_extension(p.get("file_ext", ""))]
             skipped_video = before - len(posts)
             if skipped_video:
-                self._log_message(f"Filtered out {skipped_video} video/animation posts")
+                self._log_message(t["log_filtered_video_fmt"].format(n=skipped_video))
 
-        self._log_message(f"Found {len(posts)} downloadable posts")
+        self._log_message(t["log_found_posts_fmt"].format(n=len(posts)))
         if not posts:
-            self._log_message("No matching posts.")
+            self._log_message(t["log_no_matching"])
             return "no_results"
 
         formatter = FilenameFormatter(config.filename_format)
@@ -2081,9 +2125,9 @@ class BooruDownloadGUI(ctk.CTk):
         dl.download_batch(posts)
 
         self._log_message(
-            f"Downloaded: {dl.downloaded}  "
-            f"Skipped: {dl.skipped}  "
-            f"Failed: {dl.failed}"
+            f"{t['log_downloaded_fmt'].format(n=dl.downloaded)}  "
+            f"{t['log_skipped_fmt'].format(n=dl.skipped)}  "
+            f"{t['log_failed_fmt'].format(n=dl.failed)}"
         )
         if self._cancel_event.is_set():
             return "cancelled"
@@ -2295,6 +2339,7 @@ class BooruDownloadGUI(ctk.CTk):
         self.card_dl.set_title(t["download_settings"])
         self.card_actions.set_title(t["download_settings"])
         self._lbl_folder.configure(text=t["folder_name"])
+        self.btn_browse_folder.configure(text=t["browse_folder"])
         self._lbl_fmt.configure(text=t["filename_format"])
         self.var_custom_name.configure(text=t["custom_filename"])
         self.btn_placeholder.configure(text=t["placeholder_info"])
@@ -2309,9 +2354,7 @@ class BooruDownloadGUI(ctk.CTk):
             checkbox.configure(text=t[f"tag_category_{category}"])
         self.var_tag_txt_underscore_to_space.configure(text=t["tag_txt_underscore_to_space"])
         self.var_tag_txt_escape_special_chars.configure(text=t["tag_txt_escape_special_chars"])
-        sub = self.var_folder_name.get().strip()
-        preview = str(DEFAULT_DOWNLOAD_DIR / sub) if sub else str(DEFAULT_DOWNLOAD_DIR)
-        self.lbl_path_preview.configure(text=t["save_path_label"] + preview + "/")
+        self._update_path_preview()
         if self.var_custom_name.get():
             self.lbl_fmt_hint.configure(text=t["custom_format_hint"])
         else:
@@ -2355,10 +2398,25 @@ class BooruDownloadGUI(ctk.CTk):
     def _get_entry_text(self, entry: ctk.CTkEntry) -> str:
         return entry.get().strip()
 
+    def _update_path_preview(self):
+        sub = self.var_folder_name.get().strip()
+        preview = str(self._save_root / sub) if sub else str(self._save_root)
+        self.lbl_path_preview.configure(text=self.t["save_path_label"] + preview + "/")
+
+    def _browse_save_root(self):
+        chosen = filedialog.askdirectory(
+            initialdir=str(self._save_root),
+            mustexist=True,
+        )
+        if not chosen:
+            return
+        self._save_root = Path(chosen)
+        self._update_path_preview()
+
     def _get_save_dir(self) -> str:
-        # Sanitize so "folder name" can never redirect output outside Download/.
+        # Subfolder name stays relative to the chosen save root.
         sub = sanitize_subfolder(self._get_entry_text(self.var_folder_name))
-        return str(DEFAULT_DOWNLOAD_DIR / sub) if sub else str(DEFAULT_DOWNLOAD_DIR)
+        return str(self._save_root / sub) if sub else str(self._save_root)
 
     def _build_config(self) -> Config:
         rating_val = self._rating_map.get(self.var_rating.get(), "")
@@ -2435,12 +2493,20 @@ class BooruDownloadGUI(ctk.CTk):
         _set(self.var_blocked, config.blocked_tags)
         self._set_rating_label(self._rating_rev.get(config.rating or "", self.t["rating_options"][0]))
         _set(self.var_min_score, str(config.min_score) if config.min_score is not None else "")
-        save_str = config.save_dir.replace("\\", "/")
-        dl_prefix = str(DEFAULT_DOWNLOAD_DIR).replace("\\", "/") + "/"
-        if save_str.startswith(dl_prefix):
-            _set(self.var_folder_name, save_str[len(dl_prefix):])
-        else:
+        save_path = Path(config.save_dir).expanduser()
+        default_root = Path(DEFAULT_DOWNLOAD_DIR)
+        try:
+            relative = save_path.resolve().relative_to(default_root.resolve())
+            self._save_root = default_root
+            _set(
+                self.var_folder_name,
+                "" if str(relative) == "." else str(relative).replace("\\", "/"),
+            )
+        except (ValueError, OSError):
+            # Outside the default Download/ tree: use save_dir as the root.
+            self._save_root = save_path
             _set(self.var_folder_name, "")
+        self._update_path_preview()
         _set(self.var_max_posts, str(config.max_posts))
         _set(self.var_concurrent, str(config.concurrent_downloads))
         _set(self.var_timeout, str(config.timeout))
@@ -2644,24 +2710,31 @@ class BooruDownloadGUI(ctk.CTk):
         if not tags_query.strip():
             messagebox.showwarning(self.t["hint"], self.t["no_tags_warn"])
             return
+        if not self._ensure_auth_ready(config):
+            return
 
         download_video = bool(self.var_download_video.get())
         video_status = "on" if download_video else "off"
         convert_status = config.auto_convert_format if config.auto_convert_images else "off"
+        t = self.t
         self._cancel_event.clear()
         self.progress.set(0)
-        self.lbl_stats.configure(text=self.t["searching"])
+        self.lbl_stats.configure(text=t["searching"])
         self.lbl_speed.configure(text="")
         self._set_buttons_running(True)
 
         self._log_message(LOG_DIVIDER)
-        self._log_message(f"Tags: {tags_query}")
-        self._log_message(f"Site: {config.base_url}")
-        self._log_message(f"Save: {Path(config.save_dir).resolve()}")
-        self._log_message(f"Format: {config.filename_format}")
-        self._log_message(f"Max: {config.max_posts}  |  Concurrent: {config.concurrent_downloads}")
-        self._log_message(f"Video: {video_status}")
-        self._log_message(f"Convert: {convert_status}")
+        self._log_message(t["log_tags_fmt"].format(tags=tags_query))
+        self._log_message(t["log_site_fmt"].format(site=config.base_url))
+        self._log_message(t["log_save_fmt"].format(path=Path(config.save_dir).resolve()))
+        self._log_message(t["log_format_fmt"].format(fmt=config.filename_format))
+        self._log_message(
+            t["log_max_concurrent_fmt"].format(
+                max=config.max_posts, concurrent=config.concurrent_downloads
+            )
+        )
+        self._log_message(t["log_video_fmt"].format(status=video_status))
+        self._log_message(t["log_convert_fmt"].format(status=convert_status))
         txt_status = ", ".join(config.tag_txt_categories) if config.save_tag_txt else "off"
         if config.save_tag_txt:
             txt_options = []
@@ -2671,13 +2744,13 @@ class BooruDownloadGUI(ctk.CTk):
                 txt_options.append("escape-special-chars")
             if txt_options:
                 txt_status = f"{txt_status} ({', '.join(txt_options)})"
-        self._log_message(f"TXT: {txt_status}")
+        self._log_message(t["log_txt_fmt"].format(status=txt_status))
         self._log_message(LOG_DIVIDER)
         self._log_message("")
 
         def _worker():
             try:
-                self._log_message("Searching posts...")
+                self._log_message(t["log_searching"])
                 with DanbooruClient(
                     base_url=config.base_url, username=config.username,
                     api_key=config.api_key, timeout=config.timeout,
@@ -2690,14 +2763,14 @@ class BooruDownloadGUI(ctk.CTk):
 
                 if not download_video:
                     before = len(posts)
-                    posts = [p for p in posts if (p.get("file_ext", "") or "").lower() not in VIDEO_EXTENSIONS]
+                    posts = [p for p in posts if not is_video_extension(p.get("file_ext", ""))]
                     skipped_video = before - len(posts)
                     if skipped_video:
-                        self._log_message(f"Filtered out {skipped_video} video/animation posts")
+                        self._log_message(t["log_filtered_video_fmt"].format(n=skipped_video))
 
-                self._log_message(f"Found {len(posts)} downloadable posts")
+                self._log_message(t["log_found_posts_fmt"].format(n=len(posts)))
                 if not posts:
-                    self._log_message("No matching posts.")
+                    self._log_message(t["log_no_matching"])
                     self._msg_queue.put(("done", "no_results"))
                     return
 
@@ -2726,17 +2799,17 @@ class BooruDownloadGUI(ctk.CTk):
                 stats = dl.download_batch(posts)
                 self._log_message("")
                 self._log_message(LOG_DIVIDER)
-                self._log_message(f"Downloaded: {stats['downloaded']}")
-                self._log_message(f"Skipped: {stats['skipped']}")
+                self._log_message(t["log_downloaded_fmt"].format(n=stats["downloaded"]))
+                self._log_message(t["log_skipped_fmt"].format(n=stats["skipped"]))
                 if stats["failed"]:
-                    self._log_message(f"Failed: {stats['failed']}")
-                self._log_message(f"Saved: {Path(config.save_dir).resolve()}")
+                    self._log_message(t["log_failed_fmt"].format(n=stats["failed"]))
+                self._log_message(t["log_saved_fmt"].format(path=Path(config.save_dir).resolve()))
                 self._log_message(LOG_DIVIDER)
                 self._msg_queue.put(
                     ("done", "partial_fail" if stats["failed"] else "success")
                 )
             except Exception as e:
-                self._log_message(f"\nError: {e}")
+                self._log_message(t["log_error_fmt"].format(error=e))
                 self._msg_queue.put(("done", "error"))
 
         self._download_thread = threading.Thread(target=_worker, daemon=True)
@@ -2744,7 +2817,7 @@ class BooruDownloadGUI(ctk.CTk):
 
     def _stop_download(self):
         self._cancel_event.set()
-        self._log_message("Stopping download...")
+        self._log_message(self.t["log_stopping"])
         self.btn_stop.configure(state="disabled")
 
     def _on_download_finished(self, result: str):
@@ -2752,7 +2825,7 @@ class BooruDownloadGUI(ctk.CTk):
         self.lbl_speed.configure(text="")
         t = self.t
         if result == "cancelled":
-            self._log_message("Download cancelled.")
+            self._log_message(t["log_cancelled"])
             self.lbl_stats.configure(text=t["cancelled"])
         elif result == "no_results":
             self.lbl_stats.configure(text=t["no_results"])

@@ -21,6 +21,14 @@ _WINDOWS_RESERVED_NAMES = {
 }
 _UNSAFE_SEGMENT_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# Animation / video containers skipped by default (GUI + CLI alignment).
+VIDEO_EXTENSIONS = frozenset({"mp4", "webm", "zip"})
+
+
+def is_video_extension(ext: str) -> bool:
+    """Return True when *ext* is a video/animation container we filter by default."""
+    return str(ext or "").strip().lower().lstrip(".") in VIDEO_EXTENSIONS
+
 
 def normalize_file_ext(value, default: str = "jpg") -> str:
     """Whitelist a remote file extension down to a plain alphanumeric token."""

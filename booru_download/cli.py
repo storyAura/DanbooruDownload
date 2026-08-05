@@ -24,10 +24,13 @@ from booru_download.core.config import Config
 from booru_download.core.credentials import (
     CredentialsStore,
     default_credentials_path,
+    get_auth_profile,
+    validate_credentials,
 )
 from booru_download.core.danbooru_client import DanbooruClient
 from booru_download.core.formatter import FilenameFormatter
 from booru_download.core.downloader import Downloader
+from booru_download.core.fs_safety import VIDEO_EXTENSIONS, is_video_extension
 
 
 def _app_dir() -> Path:
@@ -106,6 +109,16 @@ Filename format placeholders:
                         help="Re-download files even if they already exist")
     parser.add_argument("--timeout", type=float, default=30.0,
                         help="HTTP request timeout in seconds (default: 30)")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Search and list files that would be downloaded, without writing to disk",
+    )
+    parser.add_argument(
+        "--include-video",
+        action="store_true",
+        help="Include mp4/webm/zip video and animation files (skipped by default)",
+    )
 
     args = parser.parse_args()
 
@@ -190,6 +203,19 @@ def main():
         print("    Example: python main.py -t \"landscape rating:g score:>50\"")
         sys.exit(1)
 
+    auth = get_auth_profile(config.base_url)
+    if auth.auth_required:
+        auth_errors = validate_credentials(
+            config.base_url, config.username, config.api_key
+        )
+        if auth_errors:
+            print(
+                "ERROR This site requires API credentials. "
+                "Set them in Settings (GUI) / api_credentials.yaml, "
+                "or pass --username and --api-key."
+            )
+            sys.exit(1)
+
     # Display search info
     print(f"Search tags:      {tags_query}")
     print(f"Site:             {config.base_url}")
@@ -197,7 +223,10 @@ def main():
     print(f"Filename format:  {config.filename_format}")
     print(f"Max posts:        {config.max_posts}")
     print(f"Concurrent:       {config.concurrent_downloads}")
+    print(f"Include video:    {'yes' if args.include_video else 'no (default)'}")
     print(f"Convert images:   {config.auto_convert_format if config.auto_convert_images else 'off'}")
+    if args.dry_run:
+        print("Mode:             dry-run (no files will be written)")
     if config.username:
         print(f"Auth:             {config.username}")
     print()
@@ -215,16 +244,46 @@ def main():
         posts = list(client.search_all(tags=tags_query, max_posts=config.max_posts))
 
     search_time = time.time() - start_time
+
+    if not args.include_video:
+        before = len(posts)
+        posts = [
+            p for p in posts
+            if not is_video_extension(p.get("file_ext", ""))
+        ]
+        skipped_video = before - len(posts)
+        if skipped_video:
+            print(
+                f"Filtered out {skipped_video} video/animation posts "
+                f"({', '.join(sorted(VIDEO_EXTENSIONS))}); "
+                "use --include-video to keep them."
+            )
+
     print(f"Found {len(posts)} downloadable posts ({search_time:.1f}s)")
 
     if not posts:
         print("No posts found matching your search criteria.")
         return
 
+    formatter = FilenameFormatter(config.filename_format)
+
+    if args.dry_run:
+        print()
+        print("Dry-run preview (no downloads):")
+        print("-" * 42)
+        for post in posts:
+            name = formatter.format(post)
+            url = post.get("file_url") or post.get("large_file_url") or ""
+            print(f"  #{post.get('id', '?')}  {name}")
+            if url:
+                print(f"       {url}")
+        print("-" * 42)
+        print(f"Would download {len(posts)} file(s) to {Path(config.save_dir).resolve()}")
+        return
+
     print()
 
     # Download images
-    formatter = FilenameFormatter(config.filename_format)
     dl = Downloader(
         save_dir=config.save_dir,
         formatter=formatter,

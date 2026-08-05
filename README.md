@@ -4,15 +4,15 @@
 
 A fast Windows-friendly batch downloader for [Danbooru](https://danbooru.donmai.us) and compatible booru sites, with both a CustomTkinter GUI and a CLI.
 
-Current version: `v1.4.0`
+Current version: `v1.4.1`
 
-v1.4.0 renames the project to BooruDownload (it long ago outgrew Danbooru-only support) and hardens the whole download pipeline: atomic file writes with streaming MD5 verification, path-escape protection, corrupt-file self-healing on Windows, safe cancellation, crash-free queue threading, and non-zero exit codes on failures. See [UPDATE.md](UPDATE.md) for the full changelog.
+v1.4.1 improves first-run UX and CLI/GUI consistency: `--dry-run` preview, default video filtering, Gelbooru auth gate, flat-tag categorization for non-Danbooru sites, browsable save folder, clearer “keep only converted files” conversion option (off by default), localized worker logs, and gentler media rate limiting. See [UPDATE.md](UPDATE.md) for the full changelog.
 
 ## 版本更新
 
-当前版本：`v1.4.0`
+当前版本：`v1.4.1`
 
-本次版本将项目更名为 BooruDownload（支持站点早已不限于 Danbooru），并全面加固下载链路：原子写入 + 流式 MD5 校验、路径逃逸防护、Windows 损坏文件自愈、安全取消、队列线程不再触碰界面控件、失败时返回非零退出码。完整更新记录见 [UPDATE.md](UPDATE.md)。
+本次版本聚焦体验与一致性：CLI `--dry-run` 仿执行、默认跳过视频（`--include-video` 可打开）、Gelbooru 下载前鉴权门禁、扁平标签分类与文件名回退、可浏览保存目录、自动转换「仅保留转换结果（删除原图）」选项（默认关闭）、运行日志中英本地化，以及媒体下载节流/429 退避。完整更新记录见 [UPDATE.md](UPDATE.md)。
 
 ## 中文说明
 
@@ -26,12 +26,14 @@ v1.4.0 renames the project to BooruDownload (it long ago outgrew Danbooru-only s
 | 并发下载 | 异步下载引擎，支持自定义并发数和请求超时。 |
 | 智能跳过 | 已存在文件会进行 MD5 校验，避免重复下载。 |
 | 同名 TXT 标签 | 可为每张图片生成同名 `.txt` 标签文件，适合数据集和 LoRA 工作流。 |
-| 自动格式转换 | 下载后可自动转换为 JPG 或 WebP，支持质量、WebP 无损和压缩程度配置；可选转换后删除原图。 |
+| 自动格式转换 | 下载后可自动转换为 JPG 或 WebP；设置中可勾选 **仅保留转换结果（删除原图）**，默认关闭（仍保留原图）。 |
 | 暗色主题 | 设置页可切换浅色/深色界面，主题偏好保存在 `default_config.yaml`。 |
 | 默认配置 | 设置窗口可保存当前设置为 `default_config.yaml`，下次启动自动加载。 |
 | 全局 API 配置 | 设置 → API 认证中按站点预设保存凭据到 `api_credentials.yaml`；Gelbooru 需填写数字 User ID + API Key。 |
 | YAML 配置 | 支持导入、导出下载设置、队列任务、TXT 标签选项和图片转换选项。 |
-| 视频控制 | 可选择下载或跳过 `mp4`、`webm`、`zip` 动图/视频文件。 |
+| 视频控制 | 可选择下载或跳过 `mp4`、`webm`、`zip` 动图/视频文件；CLI 默认跳过，可用 `--include-video`。 |
+| CLI 仿执行 | `--dry-run` 只搜索并预览将下载的文件，不写盘。 |
+| 保存目录 | GUI 可浏览选择任意保存根目录，子文件夹名仍相对该根目录。 |
 
 ### 环境要求
 
@@ -51,7 +53,7 @@ pip install -r requirements.txt
 
 正式 Windows 安装包请从 [GitHub Releases](https://github.com/storyAura/BooruDownload/releases/latest) 下载：
 
-1. 下载 `BooruDownload-v1.4.0-win-x64.zip`
+1. 下载 `BooruDownload-v1.4.1-win-x64.zip`
 2. 解压到任意目录
 3. 运行 `BooruDownload.exe`
 4. 运行依赖位于 `win-x64/` 文件夹，默认下载目录为 `Download/`
@@ -103,12 +105,13 @@ build_exe.bat
 
 1. 选择站点预设，或输入自定义站点地址。
 2. 输入搜索标签、评级、最低评分和屏蔽标签。
-3. 设置保存目录和文件名格式。
+3. 设置保存目录（可点「浏览…」选择根目录）和文件名格式。
 4. 设置并发数、超时、跳过已存在文件、视频下载等选项。
 5. 可选开启同名 TXT 标签导出。
-6. 可选在设置窗口的“杂项”里开启自动图片转换，并选择 JPG/WebP、质量、WebP 无损和压缩程度。
+6. 可选在设置窗口的“杂项”里开启自动图片转换，选择 JPG/WebP、质量等；需要只留 WebP/JPG 时再勾选 **仅保留转换结果（删除原图）**（默认关闭）。
 7. 搜索多个标签时用空格分隔，例如 `1girl solo rating:g`。Gelbooru、Safebooru 同样使用空格分隔多标签。
-8. 点击 `当前开始下载` 执行单次任务，或把多个任务加入队列后点击 `队列开始下载`。
+8. 使用 Gelbooru 前请先在 **设置 → API 认证** 填写数字 User ID 与 API Key；缺少凭据时会在开始下载前拦截并提示。
+9. 点击 `当前开始下载` 执行单次任务，或把多个任务加入队列后点击 `队列开始下载`。
 
 ### API 认证（全局）
 
@@ -120,7 +123,7 @@ build_exe.bat
 
 ### 自动图片转换
 
-开启 `下载后自动转换图片格式` 后，默认仍保留原图；可在设置中取消勾选 **保留原始文件**，转换成功后仅保留 `原文件夹名_webp` 或 `原文件夹名_jpg` 中的文件。保留原图时的目录结构如下：
+开启 `下载后自动转换图片格式` 后，默认仍保留原图；可在设置中勾选 **仅保留转换结果（删除原图）**（默认关闭），转换成功后仅保留 `原文件夹名_webp` 或 `原文件夹名_jpg` 中的文件。保留原图时的目录结构如下：
 
 ```text
 Download/example/image.png
@@ -130,7 +133,7 @@ Download/example_webp/image.webp
 可配置项：
 
 - 格式：`JPG` 或 `WebP`
-- 保留原始文件：默认开启；关闭后转换成功时删除原图
+- 仅保留转换结果（删除原图）：默认关闭；勾选后转换成功时删除原图
 - 质量：`1..100`
 - WebP 无损：仅 WebP 生效
 - 压缩程度：`0..6`
@@ -177,6 +180,7 @@ auto_convert_lossless: false
 auto_convert_effort: 6
 auto_convert_background_mode: color
 auto_convert_background_color: "#ff4fd8"
+# true = 保留原图（默认）；false = 仅保留转换结果（删除原图）
 auto_convert_keep_original: true
 ```
 
@@ -188,10 +192,11 @@ python main.py --config my_config.yaml
 
 ### Gelbooru（需要 API 凭据）
 
-Gelbooru 已关闭匿名 API 访问，所有请求都必须携带账户凭据，否则会返回 `401 Unauthorized`。在站点预设中选择 Gelbooru 时，界面会在站点下方显示提醒。
+Gelbooru 已关闭匿名 API 访问，所有请求都必须携带账户凭据，否则会返回 `401 Unauthorized`。在站点预设中选择 Gelbooru 时，界面会在站点下方显示提醒；若尚未填写凭据就点开始下载，会先弹出鉴权提示并引导打开设置。
 
 - 登录 Gelbooru，打开 **My Account → Options**，复制 **数字 User ID** 和 **API Key**
 - 在 **设置 → API 认证** 中填写（用户名一栏填数字 User ID），保存后即可下载
+- CLI 使用 Gelbooru 时需提前配置 `api_credentials.yaml`，或传入 `--username` / `--api-key`
 
 ### 关于 Konachan
 
@@ -226,7 +231,15 @@ python main.py --config my_config.yaml
 
 # 保存当前 CLI 参数到 YAML
 python main.py -t "landscape" -l 50 --save-config my_config.yaml
+
+# 仿执行：只搜索并预览将下载的文件，不写盘
+python main.py -t "landscape" --rating g -l 3 --dry-run
+
+# 需要时再包含视频/动图（默认跳过 mp4/webm/zip）
+python main.py -t "landscape" -l 20 --include-video
 ```
+
+默认会跳过 `mp4` / `webm` / `zip`，与 GUI「下载视频/动图」未勾选时的行为一致。
 
 ### CLI 参数
 
@@ -246,6 +259,8 @@ python main.py -t "landscape" -l 50 --save-config my_config.yaml
 | `--save-config` | 保存配置到 YAML 后退出 | 空 |
 | `--no-skip` | 重新下载已存在文件 | 关闭 |
 | `--timeout` | HTTP 超时秒数 | `30` |
+| `--dry-run` | 只搜索并列出将下载的文件，不写盘 | 关闭 |
+| `--include-video` | 包含 mp4/webm/zip 视频与动图 | 关闭 |
 
 ### 文件名占位符
 
@@ -288,18 +303,20 @@ CLI 默认文件名格式：
 | Concurrent downloads | Async downloader with configurable concurrency and request timeouts. |
 | Smart skipping | Existing files are checked by MD5 so repeated runs do not waste bandwidth. |
 | TXT tag export | Optionally save a same-name `.txt` file for each image, useful for dataset and LoRA workflows. |
-| Image conversion | Convert downloaded still images to JPG or WebP with quality, lossless WebP, and compression controls; optionally remove originals after conversion. |
+| Image conversion | Convert downloaded still images to JPG or WebP. In Settings, enable **Keep only converted files (delete originals)** to drop originals after conversion (off by default). |
 | Dark theme | Switch light/dark UI in Settings; theme preference is saved in `default_config.yaml`. |
 | Default config | Save the current GUI settings as `default_config.yaml` and load them automatically on next start. |
 | Global API credentials | Configure per-site credentials in Settings -> API Credentials; saved to `api_credentials.yaml`. Gelbooru requires numeric User ID + API Key. |
 | YAML configs | Import/export settings, queued tasks, TXT tag options, and image conversion options. |
-| Video control | Choose whether to download or skip `mp4`, `webm`, and `zip` animation files. |
+| Video control | Choose whether to download or skip `mp4`, `webm`, and `zip` animation files. The CLI skips them by default; use `--include-video` to keep them. |
+| CLI dry-run | `--dry-run` searches and previews filenames/URLs without writing files. |
+| Save folder | Browse any save root in the GUI; the subfolder name stays relative to that root. |
 
 ### Download (Windows)
 
 Get the official Windows bundle from [GitHub Releases](https://github.com/storyAura/BooruDownload/releases/latest):
 
-1. Download `BooruDownload-v1.4.0-win-x64.zip`
+1. Download `BooruDownload-v1.4.1-win-x64.zip`
 2. Extract it to any folder
 3. Run `BooruDownload.exe`
 4. Runtime files live in `win-x64/`; the default download folder is `Download/`
@@ -354,9 +371,19 @@ python main.py -u "https://safebooru.donmai.us" -t "scenery" -l 50
 python main.py -t "touhou" -o ./touhou -f "{artist}_{id}.{ext}" -c 12
 python main.py --config my_config.yaml
 python main.py -t "landscape" -l 50 --save-config my_config.yaml
+python main.py -t "landscape" --rating g -l 3 --dry-run
+python main.py -t "landscape" -l 20 --include-video
 ```
 
-Use spaces between multiple search tags, for example `1girl solo rating:g`. Gelbooru and Safebooru use the same space-separated tag query style.
+Use spaces between multiple search tags, for example `1girl solo rating:g`. Gelbooru and Safebooru use the same space-separated tag query style. By default the CLI skips `mp4` / `webm` / `zip` (same as the GUI when “Download video/animation” is unchecked). Use `--dry-run` to preview filenames without writing files.
+
+### Image Conversion
+
+After enabling **Auto-convert downloaded images** in Settings → Misc, converted files go to a sibling `sourcefolder_webp` / `sourcefolder_jpg` folder. Originals are kept by default.
+
+- Format: `JPG` or `WebP`
+- **Keep only converted files (delete originals)**: off by default; when checked, originals are removed after a successful conversion (`auto_convert_keep_original: false` in YAML)
+- Quality, lossless WebP, compression effort, and WebP transparency background options as described in the Chinese section above
 
 ### YAML Queue And Conversion Example
 
@@ -372,15 +399,17 @@ auto_convert_lossless: false
 auto_convert_effort: 6
 auto_convert_background_mode: color
 auto_convert_background_color: "#ff4fd8"
+# true = keep originals (default); false = keep only converted files
 auto_convert_keep_original: true
 ```
 
 ### Gelbooru (API credentials required)
 
-Gelbooru has disabled anonymous API access; every request must carry account credentials or it returns `401 Unauthorized`. When you pick Gelbooru in the site preset menu, the GUI shows a reminder beneath the site picker.
+Gelbooru has disabled anonymous API access; every request must carry account credentials or it returns `401 Unauthorized`. When you pick Gelbooru in the site preset menu, the GUI shows a reminder beneath the site picker. Starting a download without credentials is blocked up front with a prompt to open Settings.
 
 - Log in to Gelbooru, open **My Account → Options**, and copy your **numeric User ID** and **API Key**
 - Enter them in **Settings → API Credentials** (the username field takes the numeric User ID), then save
+- For CLI use, configure `api_credentials.yaml` first, or pass `--username` / `--api-key`
 
 ### Konachan
 

@@ -7,8 +7,10 @@ from danbooru_client import (
     PROFILE_MOEBOORU,
     PROFILE_NOZOMI,
     DanbooruClient,
+    _categorize_flat_tags,
     _normalize_post,
 )
+from formatter import FilenameFormatter
 
 
 class ConfigTagQueryTests(unittest.TestCase):
@@ -63,6 +65,7 @@ class PostNormalizationTests(unittest.TestCase):
         )
 
         self.assertEqual(post["tag_string"], "1girl solo")
+        self.assertEqual(post["tag_string_general"], "1girl solo")
         self.assertEqual(post["file_ext"], "jpg")
         self.assertEqual(post["image_width"], 1600)
         self.assertEqual(post["image_height"], 900)
@@ -84,10 +87,33 @@ class PostNormalizationTests(unittest.TestCase):
         )
 
         self.assertEqual(post["tag_string"], "landscape sky")
+        self.assertEqual(post["tag_string_general"], "landscape sky")
         self.assertEqual(post["file_ext"], "png")
         self.assertEqual(post["rating"], "e")
         self.assertEqual(post["score"], 7)
         self.assertEqual(post["tag_string_artist"], "")
+
+    def test_categorize_flat_tags_splits_character_and_meta(self):
+        categorized = _categorize_flat_tags(
+            "hatsune_miku_(vocaloid) 1girl highres solo"
+        )
+        self.assertEqual(categorized["tag_string_character"], "hatsune_miku_(vocaloid)")
+        self.assertEqual(categorized["tag_string_meta"], "highres")
+        self.assertEqual(categorized["tag_string_general"], "1girl solo")
+
+    def test_flat_tag_filename_fallback_avoids_unknown_artist(self):
+        post = _normalize_post(
+            {
+                "id": 42,
+                "tags": "landscape sky highres",
+                "file_url": "https://example.com/a.jpg",
+            },
+            profile=PROFILE_GELBOORU,
+            base_url="https://gelbooru.com",
+        )
+        name = FilenameFormatter("{artist}_{id}.{ext}").format(post)
+        self.assertEqual(name, "landscape+sky_42.jpg")
+        self.assertNotIn("unknown", name)
 
     def test_normalizes_protocol_relative_gelbooru_url(self):
         post = _normalize_post(

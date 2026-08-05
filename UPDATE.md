@@ -2,6 +2,26 @@
 
 本文记录 BooruDownload(原名 DanbooruDownload)当前版本相对上一版的主要变化。
 
+## v1.4.1
+
+### 体验与一致性
+
+- 自动转换设置改为更直观的 **仅保留转换结果（删除原图）** 勾选项：
+  - 默认关闭：原图与转换后的 WebP/JPG 都保留
+  - 勾选后：转换成功即删除原图，只留下 `*_webp` / `*_jpg` 目录中的文件
+  - YAML 配置键仍为 `auto_convert_keep_original`（`true`=保留原图，`false`=仅保留转换结果）
+- CLI 新增 `--dry-run`：只搜索并预览将下载的文件名/URL，不写盘。
+- CLI 默认跳过 `mp4` / `webm` / `zip`，与 GUI 未勾选「下载视频/动图」一致；可用 `--include-video` 打开。
+- Gelbooru 等需凭据站点：GUI 下载前鉴权门禁（引导打开设置），CLI 缺少凭据时立即退出。
+- Gelbooru / Moebooru 扁平标签启发式分类：填充 general/character/meta，文件名 `{artist}` 在无画师字段时回退到标签前缀，避免满屏 `unknown_*` 与空 TXT。
+- GUI 可浏览选择保存根目录；运行日志改为中英本地化；搜索 429 通过 `on_log` 进入 GUI 日志。
+- 媒体下载增加轻量节流，并对 429/503 使用更长退避。
+
+### 测试与文档
+
+- 新增 dry-run、视频过滤、扁平标签分类、鉴权门禁等相关单测。
+- README 补充 `--dry-run` / `--include-video`、自动转换「仅保留转换结果」说明与 YAML 示例；版本号同步为 `v1.4.1`。
+
 ## v1.4.0
 
 ### 项目更名为 BooruDownload

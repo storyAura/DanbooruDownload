@@ -11,7 +11,7 @@ import httpx
 from booru_download.core.fs_safety import normalize_file_ext
 
 
-APP_USER_AGENT = "BooruDownload/1.4.0"
+APP_USER_AGENT = "BooruDownload/1.4.1"
 PROFILE_DANBOORU = "danbooru"
 PROFILE_MOEBOORU = "moebooru"
 PROFILE_GELBOORU = "gelbooru"
@@ -125,6 +125,52 @@ def _extract_result_posts(result) -> list[dict]:
     return []
 
 
+# Common meta tags seen on Gelbooru / Moebooru flat tag lists.
+_COMMON_META_TAGS = frozenset({
+    "highres", "absurdres", "incredibly_absurdres", "lowres", "huge_filesize",
+    "commentary", "commentary_request", "translated", "translation_request",
+    "partially_translated", "check_translation", "artist_request",
+    "copyright_request", "character_request", "tagme", "bad_id", "bad_link",
+    "md5_mismatch", "jpeg_artifacts", "alias_request", "animated",
+    "animated_gif", "animated_png", "video", "webm", "mp4", "ugoira",
+    "official_art", "scan", "comic", "4koma", "multiple_images",
+    "ai-generated", "ai_generated", "stable_diffusion",
+})
+
+
+def _categorize_flat_tags(tag_string: str) -> dict[str, str]:
+    """Best-effort category split for sites that only return a flat tag list.
+
+    Character tags often look like ``name_(series)``. Known meta tags go to
+    meta; everything else lands in general so TXT export is not empty.
+    Artist/copyright stay empty unless the source already provided them.
+    """
+    artists: list[str] = []
+    copyrights: list[str] = []
+    characters: list[str] = []
+    general: list[str] = []
+    meta: list[str] = []
+
+    for tag in tag_string.split():
+        if not tag:
+            continue
+        lower = tag.lower()
+        if lower in _COMMON_META_TAGS:
+            meta.append(tag)
+        elif "_(" in tag and tag.endswith(")"):
+            characters.append(tag)
+        else:
+            general.append(tag)
+
+    return {
+        "tag_string_artist": " ".join(artists),
+        "tag_string_copyright": " ".join(copyrights),
+        "tag_string_character": " ".join(characters),
+        "tag_string_general": " ".join(general),
+        "tag_string_meta": " ".join(meta),
+    }
+
+
 def _normalize_post(
     post: dict,
     profile: str = PROFILE_DANBOORU,
@@ -144,6 +190,21 @@ def _normalize_post(
     width = _coerce_int(normalized.get("image_width", normalized.get("width")), 0)
     height = _coerce_int(normalized.get("image_height", normalized.get("height")), 0)
 
+    artist = str(normalized.get("tag_string_artist", "") or "").strip()
+    copyright_ = str(normalized.get("tag_string_copyright", "") or "").strip()
+    character = str(normalized.get("tag_string_character", "") or "").strip()
+    general = str(normalized.get("tag_string_general", "") or "").strip()
+    meta = str(normalized.get("tag_string_meta", "") or "").strip()
+
+    # Gelbooru / Moebooru (and similar) usually only expose a flat tag list.
+    if tag_string and not any((artist, copyright_, character, general, meta)):
+        categorized = _categorize_flat_tags(tag_string)
+        artist = categorized["tag_string_artist"]
+        copyright_ = categorized["tag_string_copyright"]
+        character = categorized["tag_string_character"]
+        general = categorized["tag_string_general"]
+        meta = categorized["tag_string_meta"]
+
     normalized.update(
         {
             "file_url": file_url,
@@ -157,11 +218,11 @@ def _normalize_post(
             "image_width": width,
             "image_height": height,
             "tag_string": tag_string,
-            "tag_string_artist": normalized.get("tag_string_artist", "") or "",
-            "tag_string_copyright": normalized.get("tag_string_copyright", "") or "",
-            "tag_string_character": normalized.get("tag_string_character", "") or "",
-            "tag_string_general": normalized.get("tag_string_general", "") or "",
-            "tag_string_meta": normalized.get("tag_string_meta", "") or "",
+            "tag_string_artist": artist,
+            "tag_string_copyright": copyright_,
+            "tag_string_character": character,
+            "tag_string_general": general,
+            "tag_string_meta": meta,
             "created_at": _normalize_created_at(normalized.get("created_at")),
         }
     )
@@ -211,7 +272,19 @@ class DanbooruClient:
             time.sleep(self.REQUEST_INTERVAL - elapsed)
         self._last_request_time = time.monotonic()
 
-    def _request(self, endpoint: str, params: dict | None = None) -> list | dict:
+    def _emit_log(self, message: str, on_log: Optional[Callable[[str], None]] = None) -> None:
+        """Send a log line to the caller callback, or stdout as a CLI fallback."""
+        if on_log is not None:
+            on_log(message)
+        else:
+            print(message)
+
+    def _request(
+        self,
+        endpoint: str,
+        params: dict | None = None,
+        on_log: Optional[Callable[[str], None]] = None,
+    ) -> list | dict:
         """Make a GET request to the API with retry logic and throttling."""
         url = f"{self.base_url}{endpoint}"
         max_retries = 3
@@ -229,7 +302,7 @@ class DanbooruClient:
 
                 if resp.status_code == 429:
                     wait = min(2**attempt * 2, 30)
-                    print(f"  Rate limited, waiting {wait}s...")
+                    self._emit_log(f"  Rate limited, waiting {wait}s...", on_log)
                     time.sleep(wait)
                     continue
 
@@ -278,13 +351,20 @@ class DanbooruClient:
             return self.MOEBOORU_POSTS_PER_PAGE
         return self.POSTS_PER_PAGE
 
-    def search(self, tags: str = "", limit: int = 200, page: int | str = 1) -> list[dict]:
+    def search(
+        self,
+        tags: str = "",
+        limit: int = 200,
+        page: int | str = 1,
+        on_log: Optional[Callable[[str], None]] = None,
+    ) -> list[dict]:
         """Search for posts.
 
         Args:
             tags: Tag search query.
             limit: Number of results per page.
             page: Page number, Danbooru cursor string like 'b12345', or Gelbooru pid.
+            on_log: Optional callback for rate-limit / status messages.
 
         Returns:
             List of normalized post dicts from the API.
@@ -295,7 +375,7 @@ class DanbooruClient:
             with NozomiClient(timeout=self.timeout) as nozomi:
                 return [
                     _normalize_post(post, self.profile, self.base_url)
-                    for post in nozomi.search_all(tags=tags, max_posts=limit, on_log=None)
+                    for post in nozomi.search_all(tags=tags, max_posts=limit, on_log=on_log)
                 ]
 
         if self.profile == PROFILE_GELBOORU:
@@ -308,21 +388,21 @@ class DanbooruClient:
                 "limit": min(limit, self._max_page_limit()),
                 "pid": _coerce_int(page, 0),
             }
-            result = self._request("/index.php", params)
+            result = self._request("/index.php", params, on_log=on_log)
         elif self.profile == PROFILE_MOEBOORU:
             params = {
                 "tags": tags,
                 "limit": min(limit, self._max_page_limit()),
                 "page": page,
             }
-            result = self._request("/post.json", params)
+            result = self._request("/post.json", params, on_log=on_log)
         else:
             params = {
                 "tags": tags,
                 "limit": min(limit, self._max_page_limit()),
                 "page": page,
             }
-            result = self._request("/posts.json", params)
+            result = self._request("/posts.json", params, on_log=on_log)
 
         return [
             _normalize_post(post, self.profile, self.base_url)
@@ -357,7 +437,7 @@ class DanbooruClient:
             if on_log:
                 on_log(f"  Fetching page {page_num}...")
 
-            posts = self.search(tags=tags, limit=limit, page=page)
+            posts = self.search(tags=tags, limit=limit, page=page, on_log=on_log)
             if not posts:
                 break
 

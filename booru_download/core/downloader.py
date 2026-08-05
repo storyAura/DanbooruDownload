@@ -31,7 +31,9 @@ from booru_download.core.image_conversion import (
 )
 
 
-APP_USER_AGENT = "BooruDownload/1.4.0"
+APP_USER_AGENT = "BooruDownload/1.4.1"
+# Light pacing between media requests so default concurrency is less aggressive.
+MEDIA_REQUEST_INTERVAL = 0.05
 IMAGE_MAGIC_PREFIXES = (
     b"\xff\xd8\xff",
     b"\x89PNG\r\n\x1a\n",
@@ -163,6 +165,10 @@ class Downloader:
         self._speed_lock = threading.Lock()
         self._last_speed_report = 0.0
         self._speed_window: list[tuple[float, int]] = []  # (timestamp, bytes)
+
+        # Async media throttle (initialized per event-loop run).
+        self._media_throttle_lock: Optional[asyncio.Lock] = None
+        self._last_media_request: float = 0.0
 
     def _log(self, msg: str):
         """Send a log message to callback or tqdm."""
@@ -404,6 +410,7 @@ class Downloader:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    await self._throttle_media()
                     await self._stream_to_file(client, url, filepath, post)
 
                     if self.auto_convert_images:
@@ -431,8 +438,15 @@ class Downloader:
                     _RetryableDownloadError,
                 ) as e:
                     if attempt < max_retries - 1:
-                        # Exponential backoff with jitter
-                        base_delay = 2 ** attempt
+                        status = getattr(getattr(e, "response", None), "status_code", None)
+                        if status in {429, 503}:
+                            base_delay = min(2 ** attempt * 2, 30)
+                            self._log(
+                                f"  Rate limited on #{post.get('id', '?')}, "
+                                f"retrying in {base_delay:.0f}s..."
+                            )
+                        else:
+                            base_delay = 2 ** attempt
                         jitter = random.uniform(0, base_delay * 0.5)
                         await asyncio.sleep(base_delay + jitter)
                         continue
@@ -451,6 +465,17 @@ class Downloader:
                     return False
 
         return False
+
+    async def _throttle_media(self) -> None:
+        """Enforce a small minimum gap between media HTTP starts."""
+        if self._media_throttle_lock is None:
+            self._media_throttle_lock = asyncio.Lock()
+        async with self._media_throttle_lock:
+            now = time.monotonic()
+            wait = MEDIA_REQUEST_INTERVAL - (now - self._last_media_request)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_media_request = time.monotonic()
 
     async def _stream_to_file(
         self,
@@ -473,6 +498,12 @@ class Downloader:
 
         try:
             async with client.stream("GET", url, follow_redirects=True) as resp:
+                if resp.status_code in {429, 503}:
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {resp.status_code}",
+                        request=resp.request,
+                        response=resp,
+                    )
                 resp.raise_for_status()
                 content_length = resp.headers.get("Content-Length")
 
@@ -579,6 +610,8 @@ class Downloader:
         self._last_speed_report = 0.0
         # asyncio primitives bind to one event loop; never reuse across runs.
         self._path_locks = {}
+        self._media_throttle_lock = None
+        self._last_media_request = 0.0
 
         asyncio.run(self._download_batch_async(posts))
 
